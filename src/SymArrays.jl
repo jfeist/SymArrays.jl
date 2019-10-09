@@ -1,5 +1,7 @@
 module SymArrays
 
+export SymArray
+
 import Base: size, getindex, setindex!, iterate, length, eachindex, tail, IndexStyle
 using TupleTools, StaticArrays
 
@@ -25,6 +27,7 @@ struct SymArray{T,N,Nsyms,M} <: AbstractArray{T,N}
         new{T,sum(Nsyms),Nsyms,length(Nts)}(data,size,Nts)
     end
 end
+
 size(A::SymArray) = A.size
 length(A::SymArray) = length(A.data)
 

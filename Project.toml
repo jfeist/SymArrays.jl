@@ -3,6 +3,10 @@ uuid = "c2b21f84-4a8e-4c96-99a2-2b79df568f75"
 authors = ["Johannes Feist"]
 version = "0.1.0"
 
+[deps]
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+TupleTools = "9d95972d-f1c8-5527-a6e0-b4b365fa01f6"
+
 [compat]
 julia = "1"
 

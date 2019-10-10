@@ -17,8 +17,8 @@ struct SymArray{T,N,Nsyms,M} <: AbstractArray{T,N}
     data::Vector{T}
     size::NTuple{N,Int}
     Nts::NTuple{M,Int}
-    function SymArray(T,size,Nsyms)
-        @assert sum(Nsyms)==length(size)
+    function SymArray{T,M,Nsyms}(size...) where {T,M,Nsyms}
+        @assert sum(Nsyms)==length(size)==M
         ii::Int = 0
         f = i -> (ii+=Nsyms[i]; size[ii])
         Nts = ntuple(f,length(Nsyms))
@@ -31,7 +31,7 @@ end
 size(A::SymArray) = A.size
 length(A::SymArray) = length(A.data)
 
-SymArray(A::AbstractArray,Nsyms) = (S = SymArray(eltype(A),size(A),Nsyms); for (i,I) in enumerate(eachindex(S)); S[i] = A[I]; end; S);
+SymArray(A::AbstractArray{T,N},Nsyms) where {T,N} = (S = SymArray{T,N,Nsyms}(size(A)...); for (i,I) in enumerate(eachindex(S)); S[i] = A[I]; end; S);
 
 @generated sub2ind(A::SymArray{T,N,Nsyms}, I::Vararg{Int,N}) where {T,N,Nsyms} = begin
     body = quote

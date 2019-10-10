@@ -7,7 +7,7 @@ using SymArrays: symarrlength, sub2ind
     # Write your own tests here.
     @test symarrlength((3,6,4,3),(3,2,1,3)) == 8400
 
-    S = SymArray(Float64,(5,5),(2));
+    S = SymArray{Float64,2,(2,)}(5,5);
     @test sub2ind(S,2,5) == sub2ind(S,5,2)
     @test sub2ind(S,3,4) != sub2ind(S,5,3)
     # sub2ind has to have same number of arguments as size of N
@@ -16,7 +16,7 @@ using SymArrays: symarrlength, sub2ind
     @test S[3,5,1] == S[3,5]
     @test_throws BoundsError S[3,5,3]
 
-    S = SymArray(Float64,(3,3,3,2,4,4,4,4),(3,1,2,2));
+    S = SymArray{Float64,8,(3,1,2,2)}(3,3,3,2,4,4,4,4);
     @test size(S) == (3,3,3,2,4,4,4,4)
     @test length(S) == 2000
     # iterating over all indices should give only the distinct indices,

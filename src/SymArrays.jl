@@ -2,7 +2,7 @@ module SymArrays
 
 export SymArray
 
-import Base: size, getindex, setindex!, iterate, length, eachindex, tail, IndexStyle
+import Base: size, getindex, setindex!, iterate, length, eachindex, CartesianIndices, tail, IndexStyle
 using TupleTools, StaticArrays
 
 function symarrlength(Nts,Nsyms)
@@ -83,7 +83,8 @@ struct SymArrayIter{N}
         new{N}(Tuple(lessnext),sizes)
     end
 end
-eachindex(A::SymArray) = SymArrayIter(A);
+eachindex(A::SymArray) = Base.OneTo(length(A));
+CartesianIndices(A::SymArray) = SymArrayIter(A);
 
 first(iter::SymArrayIter) = CartesianIndex(map(one, iter.sizes))
 

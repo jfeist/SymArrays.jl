@@ -16,6 +16,22 @@ function contract(A::Vector{T},S::SymArray{U,3,(3,)},n::Union{Val{1},Val{2},Val{
     contract!(res,A,S,n)
 end
 
+# We know that $j\leq k$ (because $R$ is itself exchange symmetric)
+# \begin{align}
+# R_{jk} &= \sum_{i=1}^N g_i S_{ijk}
+# \end{align}
+
+# Matrix elements represented by $S_{ijk}$:
+# \begin{equation}
+# \begin{cases}
+# S_{ijk}, S_{ikj}, S_{jik}, S_{jki}, S_{kij}, S_{kji} & i<j<k\\
+# S_{ijk}, S_{jik}, S_{jki} & i<j=k\\
+# S_{ijk}, S_{ikj}, S_{kij} & i=j<k\\
+# S_{ijk} & i=j=k
+# \end{cases}
+# \end{equation}
+# We only need to take the contributions that show up for each $R_{jk}$
+
 # Array[i]*SymArray[(i,j,k)]
 # indices 1, 2, and 3 are exchangeable here
 function contract!(res::SymArray{TU,2,(2,)}, A::Vector{T}, S::SymArray{U,3,(3,)}, n::Union{Val{1},Val{2},Val{3}}) where {T,U,TU}

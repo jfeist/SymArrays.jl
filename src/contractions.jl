@@ -4,8 +4,8 @@
 # but carefully optimize each of them
 
 using TensorOperations
-using CuArrays
 using LinearAlgebra
+using Requires
 
 # Array[i]*SymArray[(i,j,k)]
 # indices 1, 2, and 3 are exchangeable here
@@ -142,9 +142,26 @@ function contract(A::AbstractVector{T},B::AbstractArray{U,N},::Val{n}) where {T,
     contract!(res,A,B,Val{n}())
 end
 
+mygemv!(args...) = BLAS.gemv!(args...)
+
+function _contract_middle!(res,A,B)
+    @inbounds for k=1:size(B,3)
+        mul!(@view(res[:,k]), @view(B[:,:,k]), A)
+    end
+end
+
+function __init__()
+    @require CuArrays = "3a865a2d-5b23-5a0f-bc46-62713ec82fae" begin
+        mygemv!(tA,alpha,A::CuArrays.CuArray,args...) = CuArrays.CUBLAS.gemv!(tA,alpha,A,args...)
+        _contract_middle!(res::CuArrays.CuArray,A,B) = error("please install CuTensorOperations.jl to allow this operation with CuArrays")
+    end
+    @require CuTensorOperations = "01a401d6-3e09-11e9-13be-6f1bb8674acf" begin
+        _contract_middle!(res::CuArrays.CuArray,A,B) = (@tensor res[i,k] = B[i,j,k] * A[j])
+    end
+end
+
 # Array[i_n]*Array[i1,i2,i3,...,iN]
 function contract!(res::AbstractArray{TU},A::AbstractVector{TU},B::AbstractArray{TU,N},::Val{n}) where {TU,N,n}
-    mygemv! = res isa CuArray ? CuArrays.CUBLAS.gemv! : BLAS.gemv!
     nsum = length(A)
     @assert size(B,n) == nsum
     @assert ndims(res)+1 == ndims(B)
@@ -163,13 +180,7 @@ function contract!(res::AbstractArray{TU},A::AbstractVector{TU},B::AbstractArray
         rightsize = prod(size(B,i) for i=n+1:N)
         Br = reshape(B,:,nsum,rightsize)
         resr = reshape(res,:,rightsize)
-        if res isa CuArray
-            @tensor resr[i,k] = Br[i,j,k] * A[j]
-        else
-            @inbounds for k=1:size(Br,3)
-                mul!(@view(resr[:,k]), @view(Br[:,:,k]), A)
-            end
-        end
+        _contract_middle!(resr,A,Br)
     end
     res
 end

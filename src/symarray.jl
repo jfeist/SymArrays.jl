@@ -13,14 +13,14 @@ struct SymArray{T,N,Nsyms,M} <: AbstractArray{T,N}
     data::Vector{T}
     size::NTuple{N,Int}
     Nts::NTuple{M,Int}
-    function SymArray{T,M,Nsyms}(size...) where {T,M,Nsyms}
-        @assert sum(Nsyms)==length(size)==M
+    function SymArray{T,N,Nsyms}(size...) where {T,N,Nsyms}
+        @assert sum(Nsyms)==length(size)==N
         ii::Int = 0
         f = i -> (ii+=Nsyms[i]; size[ii])
         Nts = ntuple(f,length(Nsyms))
         len = symarrlength(Nts,Nsyms)
         data = Vector{T}(undef,len)
-        new{T,sum(Nsyms),Nsyms,length(Nts)}(data,size,Nts)
+        new{T,N,Nsyms,length(Nts)}(data,size,Nts)
     end
 end
 

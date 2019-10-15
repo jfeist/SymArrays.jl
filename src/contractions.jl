@@ -9,10 +9,10 @@ using Requires
 
 # Array[i]*SymArray[(i,j,k)]
 # indices 1, 2, and 3 are exchangeable here
-function contract(A::Vector{T},S::SymArray{U,3,(3,)},n::Union{Val{1},Val{2},Val{3}}) where {T,U}
+function contract(A::Vector{T},S::SymArray{(3,),U},n::Union{Val{1},Val{2},Val{3}}) where {T,U}
     TU = promote_type(T,U)
     @assert size(S,1) == length(A)
-    res = SymArray{TU,2,(2,)}(size(S,1),size(S,2))
+    res = SymArray{(2,),TU}(size(S,1),size(S,2))
     contract!(res,A,S,n)
 end
 
@@ -34,7 +34,7 @@ end
 
 # Array[i]*SymArray[(i,j,k)]
 # indices 1, 2, and 3 are exchangeable here
-function contract!(res::SymArray{TU,2,(2,)}, A::Vector{T}, S::SymArray{U,3,(3,)}, n::Union{Val{1},Val{2},Val{3}}) where {T,U,TU}
+function contract!(res::SymArray{(2,),TU}, A::Vector{T}, S::SymArray{(3,),U}, n::Union{Val{1},Val{2},Val{3}}) where {T,U,TU}
     # only loop over S once, and put all the values where they should go
     # R[j,k] = sum_i A[i] B[i,j,k]
     # S[i,j,k] with i<=j<=k represents the 6 (not always distinct) terms: Bijk, Bikj, Bjik, Bjki, Bkij, Bkji
@@ -69,16 +69,16 @@ function contract!(res::SymArray{TU,2,(2,)}, A::Vector{T}, S::SymArray{U,3,(3,)}
 end
 
 # Array[k]*SymArray[(i,j),k]
-function contract(A::Vector{T},S::SymArray{U,3,(2,1)},n::Val{3}) where {T,U}
+function contract(A::Vector{T},S::SymArray{(2,1),U},n::Val{3}) where {T,U}
     TU = promote_type(T,U)
     sumsize = length(A)
     @assert sumsize == size(S,3)
-    res = SymArray{TU,2,(2,)}(size(S,1),size(S,2))
+    res = SymArray{(2,),TU}(size(S,1),size(S,2))
     contract!(res,A,S,n)
 end
 
 # Array[k]*SymArray[(i,j),k]
-function contract!(res::SymArray{TU,2,(2,)},A::Vector{T},S::SymArray{U,3,(2,1)},::Val{3}) where {T,U,TU}
+function contract!(res::SymArray{(2,),TU},A::Vector{T},S::SymArray{(2,1),U},::Val{3}) where {T,U,TU}
     # use that S[(i,j),k] == S[I,k] (i.e., the two symmetric indices act like a "big" index)
     mul!(res.data,reshape(S.data,:,length(A)),A)
     res
@@ -86,7 +86,7 @@ end
 
 # Array[i]*SymArray[(i,j),k)]
 # since indices 1 and 2 are exchangeable here, use this
-function contract(A::Vector{T},S::SymArray{U,3,(2,1)},n::Union{Val{1},Val{2}}) where {T,U}
+function contract(A::Vector{T},S::SymArray{(2,1),U},n::Union{Val{1},Val{2}}) where {T,U}
     TU = promote_type(T,U)
     @assert size(S,1) == length(A)
     # the result is a normal 2D array
@@ -96,7 +96,7 @@ end
 
 # Array[i]*SymArray[(i,j),k]
 # since indices 1 and 2 are exchangeable here, use this
-function contract!(res::Array{TU,2},A::Vector{T},S::SymArray{U,3,(2,1)},::Union{Val{1},Val{2}}) where {T,U,TU}
+function contract!(res::Array{TU,2},A::Vector{T},S::SymArray{(2,1),U},::Union{Val{1},Val{2}}) where {T,U,TU}
     # only loop over S once, and put all the values where they should go
     @assert size(A,1) == size(S,1)
     @assert size(res,1) == size(S,1)
@@ -115,7 +115,7 @@ end
 
 # Array[i]*SymArray[(i,j)]
 # this is symmetric in i1 and i2
-function contract!(res::Array{TU,1},A::Vector{T},S::SymArray{U,2,(2,)},::Union{Val{1},Val{2}}) where {T,U,TU}
+function contract!(res::Array{TU,1},A::Vector{T},S::SymArray{(2,),U},::Union{Val{1},Val{2}}) where {T,U,TU}
     @assert size(A,1) == size(S,1)
     @assert size(res,1) == size(S,1)
     res .= zero(TU)

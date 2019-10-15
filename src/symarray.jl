@@ -1,4 +1,4 @@
-import Base: size, getindex, setindex!, iterate, length, eachindex, CartesianIndices, tail, IndexStyle
+import Base: size, getindex, setindex!, iterate, length, eachindex, CartesianIndices, tail, IndexStyle, copyto!
 using TupleTools, StaticArrays
 
 function symarrlength(Nts,Nsyms)
@@ -9,27 +9,47 @@ function symarrlength(Nts,Nsyms)
     len
 end
 
-struct SymArray{T,N,Nsyms,M} <: AbstractArray{T,N}
-    data::Vector{T}
+struct SymArray{Nsyms,T,N,M,VecType<:AbstractVector} <: AbstractArray{T,N}
+    data::VecType
     size::NTuple{N,Int}
     Nts::NTuple{M,Int}
-    function SymArray{T,N,Nsyms}(size...) where {T,N,Nsyms}
-        @assert sum(Nsyms)==length(size)==N
+    function SymArray{Nsyms,T}(size::Vararg{Int,N}) where {Nsyms,T,N}
+        @assert sum(Nsyms)==N
         ii::Int = 0
         f = i -> (ii+=Nsyms[i]; size[ii])
         Nts = ntuple(f,length(Nsyms))
         len = symarrlength(Nts,Nsyms)
         data = Vector{T}(undef,len)
-        new{T,N,Nsyms,length(Nts)}(data,size,Nts)
+        new{Nsyms,T,N,length(Nsyms),Vector{T}}(data,size,Nts)
+    end
+    # this creates a SymArray that serves as a view on an existing vector
+    function SymArray{Nsyms}(data::VecType,size::Vararg{Int,N}) where {Nsyms,N,VecType<:AbstractVector{T}} where T
+        @assert sum(Nsyms)==N
+        ii::Int = 0
+        f = i -> (ii+=Nsyms[i]; size[ii])
+        Nts = ntuple(f,length(Nsyms))
+        len = symarrlength(Nts,Nsyms)
+        @assert length(data) == len
+        new{Nsyms,T,N,length(Nsyms),VecType}(data,size,Nts)
     end
 end
 
 size(A::SymArray) = A.size
 length(A::SymArray) = length(A.data)
 
-SymArray(A::AbstractArray{T,N},Nsyms) where {T,N} = (S = SymArray{T,N,Nsyms}(size(A)...); for (i,I) in enumerate(eachindex(S)); S[i] = A[I]; end; S);
+copyto!(S::SymArray,A::AbstractArray) = begin
+    @assert size(S) == size(A)
+    @inbounds for (i,I) in enumerate(eachindex(S))
+        S[i] = A[I]
+    end
+    S
+end
 
-@generated sub2ind(A::SymArray{T,N,Nsyms}, I::Vararg{Int,N}) where {T,N,Nsyms} = begin
+SymArray{Nsyms}(A::AbstractArray{T}) where {Nsyms,T} = (S = SymArray{Nsyms,T}(size(A)...); copyto!(S,A))
+# to avoid ambiguity with Vararg "view" constructor above
+SymArray{(1,)}(A::AbstractVector{T}) where {T} = (S = SymArray{(1,),T}(size(A)...); copyto!(S,A))
+
+@generated sub2ind(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = begin
     body = quote
         stride::Int = 1
         ind::Int = 1
@@ -58,16 +78,16 @@ SymArray(A::AbstractArray{T,N},Nsyms) where {T,N} = (S = SymArray{T,N,Nsyms}(siz
 end
 
 IndexStyle(::Type{<:SymArray}) = IndexCartesian()
-getindex(A::SymArray{T,N}, i::Int) where {T,N} = A.data[i]
-getindex(A::SymArray{T,N}, I::Vararg{Int,N}) where {T,N} = A.data[sub2ind(A,I...)]
-setindex!(A::SymArray{T,N}, v, i::Int) where {T,N} = A.data[i] = v
-setindex!(A::SymArray{T,N}, v, I::Vararg{Int,N}) where {T,N} = (A.data[sub2ind(A,I...)] = v);
+getindex(A::SymArray, i::Int) = A.data[i]
+getindex(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = A.data[sub2ind(A,I...)]
+setindex!(A::SymArray, v, i::Int) = A.data[i] = v
+setindex!(A::SymArray{Nsyms,T,N}, v, I::Vararg{Int,N}) where {Nsyms,T,N} = (A.data[sub2ind(A,I...)] = v);
 
 struct SymArrayIter{N}
     lessnext::NTuple{N,Bool}
     sizes::NTuple{N,Int}
     "create an iterator that gives i1<=i2<=i3 etc for each index group"
-    SymArrayIter(A::SymArray{T,N,Nsyms,M}) where {T,N,Nsyms,M} = begin
+    SymArrayIter(A::SymArray{Nsyms,T,N,M}) where {Nsyms,T,N,M} = begin
         lessnext = ones(MVector{N,Bool})
         sizes = A.size
         istart = 1

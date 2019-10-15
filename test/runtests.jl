@@ -7,7 +7,7 @@ using SymArrays: symarrlength, sub2ind
     # Write your own tests here.
     @test symarrlength((3,6,4,3),(3,2,1,3)) == 8400
 
-    S = SymArray{Float64,2,(2,)}(5,5);
+    S = SymArray{(2,),Float64}(5,5);
     @test sub2ind(S,2,5) == sub2ind(S,5,2)
     @test sub2ind(S,3,4) != sub2ind(S,5,3)
     # sub2ind has to have same number of arguments as size of N
@@ -16,7 +16,7 @@ using SymArrays: symarrlength, sub2ind
     @test S[3,5,1] == S[3,5]
     @test_throws BoundsError S[3,5,3]
 
-    S = SymArray{Float64,8,(3,1,2,2)}(3,3,3,2,4,4,4,4);
+    S = SymArray{(3,1,2,2),Float64}(3,3,3,2,4,4,4,4);
     @test size(S) == (3,3,3,2,4,4,4,4)
     @test length(S) == 2000
     # iterating over all indices should give only the distinct indices,
@@ -43,13 +43,30 @@ using SymArrays: symarrlength, sub2ind
 
     A = rand(5,5)
     @assert A' != A
-    @test SymArray(A,(1,1)) == A
-    @test SymArray(A,(2,)) != A
+    @test SymArray{(1,1)}(A) == A
+    @test SymArray{(2,)}(A) != A
 
     A = A + A'
     # the standard equality test uses iteration over the arrays, (a,b) in zip(A,B),
     # which only accesses the actually different indices in SymArrays
-    @test SymArray(A,(2,)) != A
+    @test SymArray{(2,)}(A) != A
     # broadcasting goes over all indices
-    @test all(SymArray(A,(2,)) .== A)
+    @test all(SymArray{(2,)}(A) .== A)
+
+    # views on existing vector-like types
+    x = rand(3)
+    S = SymArray{(2,)}(x,2,2)
+    @test S.data === x
+
+    x = 5:10
+    S = SymArray{(2,)}(x,3,3)
+    @test S.data === x
+
+    A = rand(10)
+    S = SymArray{(1,)}(A,10)
+    @test S.data === A
+
+    # but if called without sizes, the copy constructor should be used
+    S = SymArray{(1,)}(A)
+    @test S.data !== A
 end

@@ -1,7 +1,6 @@
-# Code for contracting two arrays, both for general AbstractArrays as well as
-# for SymArrays.
-# we only have a few specialized functions that we have needed up to now
-# but carefully optimize each of them
+# Functions for contracting two arrays, both for general StridedArrays as well as
+# for SymArrays. we only have a few specialized functions that we have needed up
+# to now, but carefully optimize each of them
 
 using TensorOperations
 using LinearAlgebra
@@ -9,7 +8,7 @@ using Requires
 
 # Array[i]*SymArray[(i,j,k)]
 # indices 1, 2, and 3 are exchangeable here
-function contract(A::Vector{T},S::SymArray{(3,),U},n::Union{Val{1},Val{2},Val{3}}) where {T,U}
+function contract(A::StridedVector{T},S::SymArray{(3,),U},n::Union{Val{1},Val{2},Val{3}}) where {T,U}
     TU = promote_type(T,U)
     @assert size(S,1) == length(A)
     res = SymArray{(2,),TU}(size(S,1),size(S,2))
@@ -34,7 +33,7 @@ end
 
 # Array[i]*SymArray[(i,j,k)]
 # indices 1, 2, and 3 are exchangeable here
-function contract!(res::SymArray{(2,),TU}, A::Vector{T}, S::SymArray{(3,),U}, n::Union{Val{1},Val{2},Val{3}}) where {T,U,TU}
+function contract!(res::SymArray{(2,),TU}, A::StridedVector{T}, S::SymArray{(3,),U}, n::Union{Val{1},Val{2},Val{3}}) where {T,U,TU}
     # only loop over S once, and put all the values where they should go
     # R[j,k] = sum_i A[i] B[i,j,k]
     # S[i,j,k] with i<=j<=k represents the 6 (not always distinct) terms: Bijk, Bikj, Bjik, Bjki, Bkij, Bkji
@@ -69,7 +68,7 @@ function contract!(res::SymArray{(2,),TU}, A::Vector{T}, S::SymArray{(3,),U}, n:
 end
 
 # Array[k]*SymArray[(i,j),k]
-function contract(A::Vector{T},S::SymArray{(2,1),U},n::Val{3}) where {T,U}
+function contract(A::StridedVector{T},S::SymArray{(2,1),U},n::Val{3}) where {T,U}
     TU = promote_type(T,U)
     sumsize = length(A)
     @assert sumsize == size(S,3)
@@ -78,7 +77,7 @@ function contract(A::Vector{T},S::SymArray{(2,1),U},n::Val{3}) where {T,U}
 end
 
 # Array[k]*SymArray[(i,j),k]
-function contract!(res::SymArray{(2,),TU},A::Vector{T},S::SymArray{(2,1),U},::Val{3}) where {T,U,TU}
+function contract!(res::SymArray{(2,),TU},A::StridedVector{T},S::SymArray{(2,1),U},::Val{3}) where {T,U,TU}
     # use that S[(i,j),k] == S[I,k] (i.e., the two symmetric indices act like a "big" index)
     mul!(res.data,reshape(S.data,:,length(A)),A)
     res
@@ -86,7 +85,7 @@ end
 
 # Array[i]*SymArray[(i,j),k)]
 # since indices 1 and 2 are exchangeable here, use this
-function contract(A::Vector{T},S::SymArray{(2,1),U},n::Union{Val{1},Val{2}}) where {T,U}
+function contract(A::StridedVector{T},S::SymArray{(2,1),U},n::Union{Val{1},Val{2}}) where {T,U}
     TU = promote_type(T,U)
     @assert size(S,1) == length(A)
     # the result is a normal 2D array
@@ -96,7 +95,7 @@ end
 
 # Array[i]*SymArray[(i,j),k]
 # since indices 1 and 2 are exchangeable here, use this
-function contract!(res::Array{TU,2},A::Vector{T},S::SymArray{(2,1),U},::Union{Val{1},Val{2}}) where {T,U,TU}
+function contract!(res::StridedArray{TU,2},A::StridedVector{T},S::SymArray{(2,1),U},::Union{Val{1},Val{2}}) where {T,U,TU}
     # only loop over S once, and put all the values where they should go
     @assert size(A,1) == size(S,1)
     @assert size(res,1) == size(S,1)
@@ -115,8 +114,18 @@ end
 
 # Array[i]*SymArray[(i,j)]
 # this is symmetric in i1 and i2
-function contract!(res::Array{TU,1},A::Vector{T},S::SymArray{(2,),U},::Union{Val{1},Val{2}}) where {T,U,TU}
-    @assert size(A,1) == size(S,1)
+function contract(A::StridedVector{T},S::SymArray{(2,),U},n::Union{Val{1},Val{2}}) where {T,U}
+    TU = promote_type(T,U)
+    @assert size(S,1) == length(A)
+    # the result is a normal 1D vector
+    res = Vector{TU}(undef,size(S,2))
+    contract!(res,A,S,n)
+end
+
+# Array[i]*SymArray[(i,j)]
+# this is symmetric in i1 and i2
+function contract!(res::StridedVector{TU},A::StridedVector{T},S::SymArray{(2,),U},::Union{Val{1},Val{2}}) where {T,U,TU}
+@assert size(A,1) == size(S,1)
     @assert size(res,1) == size(S,1)
     res .= zero(TU)
     # only loop over S once, and put all the values where they should go
@@ -132,13 +141,15 @@ function contract!(res::Array{TU,1},A::Vector{T},S::SymArray{(2,),U},::Union{Val
 end
 
 # Array[i_n]*Array[i1,i2,i3,...,iN]
-function contract(A::AbstractVector{T},B::AbstractArray{U,N},::Val{n}) where {T,U,N,n}
+function contract(A::StridedVector{T},B::StridedArray{U,N},::Val{n}) where {T,U,N,n}
     TU = promote_type(T,U)
     @assert 1 <= n <= N
     
     resdims = size(B)[1:N .!= n]
     res = similar(B,TU,resdims)
 
+    A = convert(AbstractArray{TU},A)
+    B = convert(AbstractArray{TU},B)
     contract!(res,A,B,Val{n}())
 end
 
@@ -161,7 +172,7 @@ function __init__()
 end
 
 # Array[i_n]*Array[i1,i2,i3,...,iN]
-function contract!(res::AbstractArray{TU},A::AbstractVector{TU},B::AbstractArray{TU,N},::Val{n}) where {TU,N,n}
+function contract!(res::StridedArray{TU},A::StridedVector{TU},B::StridedArray{TU,N},::Val{n}) where {TU,N,n}
     nsum = length(A)
     @assert size(B,n) == nsum
     @assert ndims(res)+1 == ndims(B)

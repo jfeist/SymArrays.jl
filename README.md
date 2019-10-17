@@ -7,11 +7,11 @@
 
 This package provides some tools to efficiently store arrays with exchange symmetries, i.e., arrays where exchanging two indices leaves the value unchanged. It stores the underlying data in a flat vector and provides mappings that allow to address it as a "normal" `AbstractArray{T,N}`. To generate a new one with undefined data, use
 ```julia
-S = SymArray(T,size,Nsyms)
+S = SymArray{Nsyms,T}(dims...)
 ```
-where `T` is the element type (e.g., `Float64` or `ComplexF64`), `size` is a tuple of the index sizes, and `NSyms` is a tuple that indicates the size of each group of exchangeable indices (which have to be adjacent for simplicity). As an example
+where `NSyms` is a tuple that indicates the size of each group of exchangeable indices (which have to be adjacent for simplicity), `T` is the element type (e.g., `Float64` or `ComplexF64`), and `dims` are the dimensions of the array (which have to fulfill `length(dims)==sum(Nsyms)`. As an example
 ```julia
-S = SymArray(Float64,(10,10,10,3,50,50,50),(3,1,2,1))
+S = SymArray{(3,1,2,1),Float64}(10,10,10,3,50,50,50)
 ```
 declares an array `S[(i,j,k),l,(m,n),o]` where any permutation of `(i,j,k)` leaves the value unchanged, as does any permutation of `(m,n)`. Note that interchangeable indices obviously have to have the same size (this is currently not checked explicitly in the input!).
 

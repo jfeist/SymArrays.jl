@@ -1,5 +1,5 @@
 import Base: size, getindex, setindex!, iterate, length, eachindex, CartesianIndices, tail, IndexStyle, copyto!
-using TupleTools, StaticArrays
+using TupleTools
 
 function symarrlength(Nts,Nsyms)
     len = 1
@@ -86,21 +86,21 @@ getindex(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = A.data[su
 setindex!(A::SymArray, v, i::Int) = A.data[i] = v
 setindex!(A::SymArray{Nsyms,T,N}, v, I::Vararg{Int,N}) where {Nsyms,T,N} = (A.data[sub2ind(A,I...)] = v);
 
+@generated function lessnexts(::SymArray{Nsyms}) where Nsyms
+    lessnext = ones(Bool,sum(Nsyms))
+    istart = 1
+    for Nsym in Nsyms
+        istart += Nsym
+        lessnext[istart-1] = false
+    end
+    Tuple(lessnext)
+end
+
 struct SymArrayIter{N}
     lessnext::NTuple{N,Bool}
     sizes::NTuple{N,Int}
     "create an iterator that gives i1<=i2<=i3 etc for each index group"
-    SymArrayIter(A::SymArray{Nsyms,T,N,M}) where {Nsyms,T,N,M} = begin
-        lessnext = ones(MVector{N,Bool})
-        sizes = A.size
-        istart = 1
-        for (Nt,Nsym) in zip(A.Nts,Nsyms)
-            iend = istart+Nsym
-            lessnext[iend-1] = false
-            istart = iend
-        end
-        new{N}(Tuple(lessnext),sizes)
-    end
+    SymArrayIter(A::SymArray{Nsyms,T,N,M}) where {Nsyms,T,N,M} = new{N}(lessnexts(A),A.size)
 end
 eachindex(A::SymArray) = CartesianIndices(A);
 CartesianIndices(A::SymArray) = SymArrayIter(A);

@@ -1,13 +1,8 @@
 import Base: size, getindex, setindex!, iterate, length, eachindex, CartesianIndices, tail, IndexStyle, copyto!
 using TupleTools
 
-function symarrlength(Nts,Nsyms)
-    len = 1
-    for (Nt,Nsym) in zip(Nts,Nsyms)
-        len *= prod(Nt+ii for ii=0:Nsym-1) ÷ factorial(Nsym)
-    end
-    len
-end
+# calculates the length of a SymArray
+symarrlength(Nts,Nsyms) = prod(binomial(Nt-1+Nsym, Nsym) for (Nt,Nsym) in zip(Nts,Nsyms))
 
 struct SymArray{Nsyms,T,N,M,VecType<:AbstractVector} <: AbstractArray{T,N}
     data::VecType

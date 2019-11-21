@@ -49,12 +49,12 @@ SymArr_ifsym(A,Nsyms) = all(Nsyms.==1) ? A : SymArray{(Nsyms...,)}(A)
 
 """return an expression for calculating binomial(ii+n+offset,n)
 this is equal to prod((ii+j+offset)/j, j=1:n)"""
-function symind_binomial_expr(ii::Symbol,n::Int,offset::Int)
-    binom = :( $ii + $(offset+1) ) # j=1
+macro symind_binomial(ii::Symbol,n::Int,offset::Int)
+    binom = :( $(esc(ii)) + $(offset+1) ) # j=1
     # careful about operation order:
     # first multiply, the product is then always divisible by j
     for j=2:n
-        binom = :( ($binom*($ii+$(offset+j))) ÷ $j )
+        binom = :( ($binom*($(esc(ii))+$(offset+j))) ÷ $j )
     end
     binom
 end
@@ -73,16 +73,14 @@ end
         for (inum,isym) in enumerate(isyms[2:end])
             # calculate binomial(i_n+ndim-2,ndim)
             # ndim = inum+1 (enumerate starts at 1 for dimension 2)
-            binom = symind_binomial_expr(isym,inum+1,-2)
-            indexpr = :( $indexpr + $binom )
+            indexpr = :( $indexpr + @symind_binomial($isym,$(inum+1),-2) )
         end
-        # stride is binomial(Nt+Nsym-1,Nsym) (total size of the symmetric block)
-        strideexpr = symind_binomial_expr(:Nt,Nsym,-1)
         expr = quote
             Nt = A.Nts[$iN]
             ($(isyms...),) = TupleTools.sort(($(Ilocs...),))
             ind += $indexpr * stride
-            stride *= $strideexpr
+            # stride is binomial(Nt+Nsym-1,Nsym) (total size of the symmetric block)
+            stride *= @symind_binomial(Nt,$Nsym,-1)
         end
         push!(body.args,expr)
     end

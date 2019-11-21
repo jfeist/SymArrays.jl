@@ -47,6 +47,18 @@ SymArray{(1,)}(A::AbstractVector{T}) where {T} = (S = SymArray{(1,),T}(size(A)..
 "`SymArr_ifsym(A,Nsyms)` make a SymArray if there is some symmetry (i.e., any of the Nsyms are not 1)"
 SymArr_ifsym(A,Nsyms) = all(Nsyms.==1) ? A : SymArray{(Nsyms...,)}(A)
 
+"""return an expression for calculating binomial(ii+n+offset,n)
+this is equal to prod((ii+j+offset)/j, j=1:n)"""
+function symind_binomial_expr(ii::Symbol,n::Int,offset::Int)
+    binom = :( $ii + $(offset+1) ) # j=1
+    # careful about operation order:
+    # first multiply, the product is then always divisible by j
+    for j=2:n
+        binom = :( ($binom*($ii+$(offset+j))) ÷ $j )
+    end
+    binom
+end
+
 @generated sub2ind(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = begin
     body = quote
         stride::Int = 1
@@ -59,15 +71,18 @@ SymArr_ifsym(A,Nsyms) = all(Nsyms.==1) ? A : SymArray{(Nsyms...,)}(A)
         Ilocs = ( :( I[$(ii+=1)] ) for _=1:Nsym)
         indexpr = :( $(isyms[1])-1 )
         for (inum,isym) in enumerate(isyms[2:end])
-            prodterms = (:( $isym + $(j-1) ) for j=0:inum)
-            indexpr = :( $indexpr + *($(prodterms...)) ÷ $(factorial(inum+1)) )
+            # calculate binomial(i_n+ndim-2,ndim)
+            # ndim = inum+1 (enumerate starts at 1 for dimension 2)
+            binom = symind_binomial_expr(isym,inum+1,-2)
+            indexpr = :( $indexpr + $binom )
         end
-        strideterms = ( :( Nt+$ii ) for ii=0:Nsym-1)
+        # stride is binomial(Nt+Nsym-1,Nsym) (total size of the symmetric block)
+        strideexpr = symind_binomial_expr(:Nt,Nsym,-1)
         expr = quote
             Nt = A.Nts[$iN]
             ($(isyms...),) = TupleTools.sort(($(Ilocs...),))
             ind += $indexpr * stride
-            stride *= *($(strideterms...)) ÷ $(factorial(Nsym))
+            stride *= $strideexpr
         end
         push!(body.args,expr)
     end

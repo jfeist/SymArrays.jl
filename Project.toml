@@ -12,7 +12,7 @@ TupleTools = "9d95972d-f1c8-5527-a6e0-b4b365fa01f6"
 
 [compat]
 Requires = "0.5"
-TensorOperations = "1"
+TensorOperations = "1,2"
 TupleTools = "1.1"
 julia = "1"
 

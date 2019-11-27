@@ -47,16 +47,46 @@ SymArray{(1,)}(A::AbstractVector{T}) where {T} = (S = SymArray{(1,),T}(size(A)..
 "`SymArr_ifsym(A,Nsyms)` make a SymArray if there is some symmetry (i.e., any of the Nsyms are not 1)"
 SymArr_ifsym(A,Nsyms) = all(Nsyms.==1) ? A : SymArray{(Nsyms...,)}(A)
 
-"""return an expression for calculating binomial(ii+n+offset,n)
-this is equal to prod((ii+j+offset)/j, j=1:n)"""
-macro symind_binomial(ii::Symbol,n::Int,offset::Int)
+"""based on Base.binomial, but without negative values for n and without overflow checks
+(index calculations here should not overflow if the array does not have more elements than an Int64 can represent)"""
+function binomial_simple(n::T, k::T) where T<:Integer
+    (k < 0 || k > n) && return zero(T)
+    (k == 0 || k == n) && return one(T)
+    if k > (n>>1)
+        k = n - k
+    end
+    k == 1 && return n
+    x::T = nn = n - k + 1
+    nn += 1
+    rr = 2
+    while rr <= k
+        x = div(x*nn, rr)
+        rr += 1
+        nn += 1
+    end
+    x
+end
+
+"""calculate binomial(ii+n+offset,n), equal to prod((ii+j+offset)/j, j=1:n)
+This shows up in size and index calculations for arrays with symmetric indices."""
+macro symind_binomial(ii,n::Integer,offset::Integer)
     binom = :( $(esc(ii)) + $(offset+1) ) # j=1
     # careful about operation order:
     # first multiply, the product is then always divisible by j
     for j=2:n
         binom = :( ($binom*($(esc(ii))+$(offset+j))) ÷ $j )
     end
-    binom
+    # (N n) = (N N-n) -> (ii+offset+n n) = (ii+offset+n ii+offset)
+    # when we do this replacement, we cannot unroll the loop explicitly,
+    # but it still turns out to be faster for large n and small (ii+offset)
+    binom_func = :( binomial_simple($(esc(ii))+$(n+offset),$(esc(ii))+$offset) )
+    # for small n, just return the unrolled calculation directly
+    if n < 10
+        binom
+    else
+        # in principle, ii+offset < n, but heuristically use n/2 to ensure that it wins against explicit unrolling
+        :( $(esc(ii)) < $(n÷2 - offset) ? $binom_func : $binom )
+    end
 end
 
 @generated sub2ind(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = begin

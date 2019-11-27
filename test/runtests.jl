@@ -29,19 +29,31 @@ using Random
         # calculating the linear index when iterating over Cartesian indices should give sequential access to the array
         @test 1:length(S) == [(sub2ind(S,Tuple(I)...) for I in eachindex(S))...]
 
-        # test that permuting exchangeable indices accesses the same array element
-        i1  = sub2ind(S,1,2,3,1,4,3,2,1)
-        @test sub2ind(S,2,3,1,1,4,3,2,1) == i1
-        @test sub2ind(S,2,3,1,1,3,4,2,1) == i1
-        @test sub2ind(S,2,3,1,1,3,4,1,2) == i1
-        @test sub2ind(S,2,1,3,1,4,3,1,2) == i1
-        # make sure that swapping independent indices gives a different array element
-        @test sub2ind(S,2,1,3,1,4,1,3,2) != i1
-        @test sub2ind(S,1,2,3,2,4,3,2,1) != i1
-        @test sub2ind(S,1,2,3,1,1,3,2,4) != i1
+        @testset "sub2ind" begin
+            # test that permuting exchangeable indices accesses the same array element
+            i1  = sub2ind(S,1,2,3,1,4,3,2,1)
+            @test sub2ind(S,2,3,1,1,4,3,2,1) == i1
+            @test sub2ind(S,2,3,1,1,3,4,2,1) == i1
+            @test sub2ind(S,2,3,1,1,3,4,1,2) == i1
+            @test sub2ind(S,2,1,3,1,4,3,1,2) == i1
+            # make sure that swapping independent indices gives a different array element
+            @test sub2ind(S,2,1,3,1,4,1,3,2) != i1
+            @test sub2ind(S,1,2,3,2,4,3,2,1) != i1
+            @test sub2ind(S,1,2,3,1,1,3,2,4) != i1
 
-        SI = eachindex(S)
-        @test first(SI) == CartesianIndex(1,1,1,1,1,1,1,1)
+            SI = eachindex(S)
+            @test first(SI) == CartesianIndex(1,1,1,1,1,1,1,1)
+
+            NN = 4
+            maxNdim = 40
+            for Ndim = 1:maxNdim
+                A = SymArray{(Ndim,),Float64}(ntuple(i->NN,Ndim)...)
+                Is = ntuple(i->NN,Ndim)
+                @test sub2ind(A,Is...) == length(A)
+                Is = ntuple(i->1,Ndim)
+                @test sub2ind(A,Is...) == 1
+            end
+        end
 
         A = rand(5,5)
         @assert A' != A

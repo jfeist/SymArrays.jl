@@ -4,7 +4,7 @@
 
 using TensorOperations
 using LinearAlgebra
-using Requires
+using CUDAapi
 
 # Array[i]*SymArray[(i,j,k)]
 # indices 1, 2, and 3 are exchangeable here
@@ -161,14 +161,10 @@ function _contract_middle!(res,A,B)
     end
 end
 
-function __init__()
-    @require CuArrays = "3a865a2d-5b23-5a0f-bc46-62713ec82fae" begin
-        mygemv!(tA,alpha,A::CuArrays.CuArray,args...) = CuArrays.CUBLAS.gemv!(tA,alpha,A,args...)
-        _contract_middle!(res::CuArrays.CuArray,A,B) = error("please install CuTensorOperations.jl to allow this operation with CuArrays")
-    end
-    @require CuTensorOperations = "01a401d6-3e09-11e9-13be-6f1bb8674acf" begin
-        _contract_middle!(res::CuArrays.CuArray,A,B) = (@tensor res[i,k] = B[i,j,k] * A[j])
-    end
+if has_cuda_gpu()
+    using CuArrays
+    mygemv!(tA,alpha,A::CuArray,args...) = CuArrays.CUBLAS.gemv!(tA,alpha,A,args...)
+    _contract_middle!(res::CuArray,A,B) = (@tensor res[i,k] = B[i,j,k] * A[j])
 end
 
 # Array[i_n]*Array[i1,i2,i3,...,iN]

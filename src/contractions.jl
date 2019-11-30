@@ -38,31 +38,18 @@ function contract!(res::SymArray{(2,),TU}, A::StridedVector{T}, S::SymArray{(3,)
     # R[j,k] = sum_i A[i] B[i,j,k]
     # S[i,j,k] with i<=j<=k represents the 6 (not always distinct) terms: Bijk, Bikj, Bjik, Bjki, Bkij, Bkji
     # since R[j,k] is also exchange symmetric, we only need to calculate j<=k
-    # commented out terms below are the ones where j>k
+    # this means we only have to check each adjacent pair of indices and include
+    # their permutation if not equal, but keeping the result indices ordered
     @assert size(S,1) == length(A)
     @assert size(S,1) == size(res,1)
     res.data .= 0
     @inbounds for (v,inds) in zip(S.data,CartesianIndices(S))
         i,j,k = Tuple(inds)
         res[j,k] += v*A[i]
-        if i==j==k
-            continue
-        elseif i==j # i=j < k
-            # exch. terms: Sikj and Skij
-            # res[k,j] += v*A[i] i2>i3
-            res[i,j] += v*A[k]
-        elseif j==k # i < j=k
-            # exch. terms Sjik, Sjki
-            res[i,k] += v*A[j]
-            # res[k,i] += v*A[j] i3>i2
-        else # i<j<k
-            # exch. terms Sikj, Sjik, Sjki, Skij, Skji
-            # res[k,j] += v*A[i] i3>i2
-            res[i,k] += v*A[j]
-            # res[k,i] += v*A[j] i3>i2
-            res[i,j] += v*A[k]
-            # res[j,i] += v*A[k] i3>i2
-        end
+        # have to include i<->j
+        if i<j res[i,k] += v*A[j] end
+        # have to include i<->k, but keep indices of res sorted
+        if j<k res[i,j] += v*A[k] end
     end
     res
 end

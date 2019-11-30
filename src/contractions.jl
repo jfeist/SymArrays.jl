@@ -178,3 +178,62 @@ function contract!(res::StridedArray{TU},A::StridedVector{TU},B::StridedArray{TU
     end
     res
 end
+
+function contract_gen!(res::SymArray{NsymsC,TU}, A::Array{T,NA}, S::SymArray{NsymsS,U}, ::Val{nA}, ::Val{nS}) where {T,U,TU,NsymsS,NsymsC,NA,nA,nS}
+    # only loop over S once, and put all the values where they should go
+
+    # we contract one dimension from each array
+    @assert sum(NsymsC) == sum(NsymsS)+NA-2
+    
+    sizeA = size(A)
+    sizeS = size(S)
+    @assert sizeA[nA] == sizeS[nS]
+    NtsS = S.Nts
+    contracted_group, Nsym_ctrgrp, nS_1 = symgroup(S,nS)
+    NsymsA_contracted = ntuple(_->1,NA-1)
+    NtsA_contracted = TupleTools.deleteat(sizeA,nA)
+    if Nsym_ctrgrp == 1
+        NsymsS_contracted = TupleTools.deleteat(NsymsS,contracted_group)
+        NtsS_contracted = TupleTools.deleteat(NtsS,contracted_group)
+    else
+        NsymsS_contracted = Base.setindex(NsymsS,Nsym_ctrgrp-1,contracted_group)
+        NtsS_contracted = NtsS
+    end
+    NsymsC_check = (NsymsA_contracted...,NsymsS_contracted...)
+    NtsC_check = (NtsA_contracted...,NtsS_contracted...)
+    @assert NsymsC_check == NsymsC
+    @assert NtsC_check == res.Nts
+    
+    if NA>1
+        Aindexp = ntuple(i->i==nA ? 1 : Colon(),NA)
+        Aloopinds = CartesianIndices(A[Aindexp...])
+    else
+        Aloopinds = ((),)
+    end 
+    
+    res.data .= 0
+    @inbounds for (v,indsS) in zip(S.data,CartesianIndices(S))
+        IS = Tuple(indsS)
+        isum = IS[nS_1]
+        IresS = TupleTools.deleteat(IS,nS_1)
+        for indsresA in Aloopinds
+            IresA = Tuple(indsresA)
+            Aprevinds = IresA[1:nA-1]
+            Apostinds = IresA[nA:end]
+            res[IresA...,IresS...] += v * A[Aprevinds...,isum,Apostinds...]
+        end
+        for nS_exc = nS_1 : nS_1+Nsym_ctrgrp-2
+            if IS[nS_exc] < IS[nS_exc+1]
+                isum = IS[nS_exc+1]
+                IresS = TupleTools.deleteat(IS,nS_exc+1)
+                for indsresA in Aloopinds
+                    IresA = Tuple(indsresA)
+                    Aprevinds = IresA[1:nA-1]
+                    Apostinds = IresA[nA:end]
+                    res[IresA...,IresS...] += v * A[Aprevinds...,isum,Apostinds...]
+                end
+            end
+        end
+    end
+    res
+end

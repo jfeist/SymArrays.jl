@@ -1,4 +1,4 @@
-import Base: size, getindex, setindex!, iterate, length, eachindex, CartesianIndices, tail, IndexStyle, copyto!
+import Base: size, getindex, setindex!, iterate, length, eachindex, CartesianIndices, tail, IndexStyle, copyto!, _sub2ind
 using TupleTools
 
 # calculates the length of a SymArray
@@ -89,7 +89,8 @@ macro symind_binomial(ii,n::Integer,offset::Integer)
     end
 end
 
-@generated sub2ind(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = begin
+@generated _sub2ind(A::SymArray{Nsyms,T,N}, I::Vararg{Int,M}) where {Nsyms,T,N,M} = begin
+    N==M || error("_sub2ind(::SymArray): number of indices $M != number of dimensions $N")
     body = quote
         stride::Int = 1
         ind::Int = 1
@@ -120,9 +121,9 @@ end
 
 IndexStyle(::Type{<:SymArray}) = IndexCartesian()
 getindex(A::SymArray, i::Int) = A.data[i]
-getindex(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = A.data[sub2ind(A,I...)]
+getindex(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = A.data[_sub2ind(A,I...)]
 setindex!(A::SymArray, v, i::Int) = A.data[i] = v
-setindex!(A::SymArray{Nsyms,T,N}, v, I::Vararg{Int,N}) where {Nsyms,T,N} = (A.data[sub2ind(A,I...)] = v);
+setindex!(A::SymArray{Nsyms,T,N}, v, I::Vararg{Int,N}) where {Nsyms,T,N} = (A.data[_sub2ind(A,I...)] = v);
 
 @generated function lessnexts(::SymArray{Nsyms}) where Nsyms
     lessnext = ones(Bool,sum(Nsyms))

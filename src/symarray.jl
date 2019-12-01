@@ -172,3 +172,34 @@ end
     valid, I = __inc(tail(state), tail(sizes), tail(lessnext))
     return valid, (1, I...)
 end
+
+struct SymIndexIter{Nsym}
+    size::Int
+    "create an iterator that gives i1<=i2<=i3 etc for one index group"
+    SymIndexIter(Nsym,size) = new{Nsym}(size)
+end
+
+first(iter::SymIndexIter{Nsym}) where Nsym = CartesianIndex(ntuple(one,Nsym))
+
+@inline function iterate(iter::SymIndexIter)
+    iterfirst = first(iter)
+    iterfirst, iterfirst
+end
+@inline function iterate(iter::SymIndexIter, state)
+    valid, I = __inc(state.I, iter.size)
+    valid || return nothing
+    return CartesianIndex(I...), CartesianIndex(I...)
+end
+# increment post check to avoid integer overflow
+@inline __inc(::Tuple{}, ::Tuple{}) = false, ()
+@inline function __inc(state::Tuple{Int}, size::Int)
+    valid = state[1] < size[1]
+    return valid, (state[1]+1,)
+end
+@inline function __inc(state, size::Int)
+    if state[1] < state[2]
+        return true, (state[1]+1, tail(state)...)
+    end
+    valid, I = __inc(tail(state), size)
+    return valid, (1, I...)
+end

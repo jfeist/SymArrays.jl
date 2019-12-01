@@ -229,60 +229,81 @@ end
     code
 end
 
-@generated function contract!(res::SymArray{Nsymsres,TU}, A::Array{T,NA}, S::SymArray{NsymsS,U}, ::Val{nA}, ::Val{nS}) where {T,U,TU,NsymsS,Nsymsres,NA,nA,nS}
-    # only loop over S once, and put all the values where they should go
+"""
+A[iAprev,icntrct,iApost]
+S[iSprev,Icntrct,ISpost]
+res[iAprev,iApost,iSprev,Icntrct-1,ISpost]
+"""
+@generated function contract_symindex!(res::Array{TU,5}, A::Array{T,3}, ::Val{sizeA13unit}, S::Array{U,3}, ::Val{sizeS13unit}, ::Val{Nsym}) where {T,U,TU,sizeA13unit,sizeS13unit,Nsym}
+    # Nsym-dimensional index tuple
+    iS2s = Tuple(Symbol.(:iS2_,1:Nsym))
+    # combined (Nsym-1)-dimensional index for the Nsym possible permutations
+    iSm2s = Tuple(Symbol.(:iSm2_,1:Nsym))
+
+    iAsetters = quote
+        $(iSm2s[1]) = symgrp_sortedsub2ind($(tail(iS2s)...))
+    end
+    iAusers = quote
+        res[iA1,iA3,iS1,$(iSm2s[1]),iS3] += v * A[iA1,$(iS2s[1]),iA3]
+    end
+    for n = 2:Nsym
+        chk = :( $(iS2s[n-1])<$(iS2s[n]) )
+        syminds = TupleTools.deleteat(iS2s,n)
+        push!(iAsetters.args, :( $chk && ($(iSm2s[n]) = symgrp_sortedsub2ind($(syminds...))) ))
+        push!(iAusers.args, :( $chk && (res[iA1,iA3,iS1,$(iSm2s[n]),iS3] += v * A[iA1,$(iS2s[n]),iA3]) ))
+    end
+
+    iA1max = sizeA13unit[1] ? 1 : :(size(A,1))
+    iA3max = sizeA13unit[2] ? 1 : :(size(A,3))
+    iS1max = sizeS13unit[1] ? 1 : :(size(S,1))
+    iS3max = sizeS13unit[2] ? 1 : :(size(S,3))
+
+    code = quote
+        # size of iterated index is middle index of A
+        iterdimS = SymIndexIter(Nsym,size(A,2))
+
+        res .= zero(TU)
+        @inbounds for iS3 = 1:$iS3max
+            for (iS2,IS) = enumerate(iterdimS)
+                ($(iS2s...),) = Tuple(IS)
+                $iAsetters
+                for iS1 = 1:$iS1max
+                    v = S[iS1,iS2,iS3]
+                    for iA3 = 1:$iA3max
+                        for iA1 = 1:$iA1max
+                            $iAusers
+                        end
+                    end
+                end
+            end
+        end
+    end
+    code
+end
+
+symgrpsize(Nsym,Nt) = binomial(Nt-1+Nsym, Nsym);
+"calculates a new shape for an array with size sizeA where all indices left and right of nA are collapsed together"
+newsize_centered(sizeA,nA) = (prod(sizeA[1:nA-1]),sizeA[nA],prod(sizeA[nA+1:end]))
+
+function contract!(res::SymArray{Nsymsres,TU}, A::Array{T,NA}, S::SymArray{NsymsS,U}, ::Val{nA}, ::Val{nS}) where {T,U,TU,NsymsS,Nsymsres,NA,nA,nS}
+    # first check that all the sizes are compatible etc
+    check_contraction_compatibility(res,A,S,Val(nA),Val(nS))
 
     contracted_group, Nsym_ctrgrp, nS_1 = symgrp_info(S,nS)
 
-    iresAsyms = Tuple(Symbol.(:iresA,1:NA-1))
-    Aloopcode = (isum,IresS) -> begin
-        if NA>1
-            Aprevinds = iresAsyms[1:nA-1]
-            Apostinds = iresAsyms[nA:NA-1]
-            quote
-                for indsresA in Aloopinds
-                    ($(iresAsyms...),) = Tuple(indsresA)
-                    res[$(iresAsyms...),$(IresS...)] += v * A[$(Aprevinds...),$isum,$(Apostinds...)]
-                end
-            end
-        else
-            :( res[$(IresS...)] += v * A[$isum] )
-        end
-    end
+    sizeAp = newsize_centered(size(A),nA)
+    Apacked = reshape(A,sizeAp)
 
-    iSsyms = Tuple(Symbol.(:iS,1:sum(NsymsS)))
-    nStermcode = nS -> begin
-        isum = iSsyms[nS]
-        IresS = TupleTools.deleteat(iSsyms,nS)
-        Aloopcode(isum,IresS)
-    end
+    grpsizeS = symgrpsize.(NsymsS,S.Nts)
+    sizeSp = newsize_centered(grpsizeS, contracted_group)
+    Spacked = reshape(S.data,sizeSp)
 
-    loopcode = Expr(:block)
-    push!(loopcode.args, :( ($(iSsyms...),) = Tuple(indsS) ) )
-    push!(loopcode.args, nStermcode(nS_1))
-    for nS_exc = nS_1 : nS_1+Nsym_ctrgrp-2
-        push!(loopcode.args, quote
-            if $(iSsyms[nS_exc]) < $(iSsyms[nS_exc+1])
-                $(nStermcode(nS_exc+1))
-            end
-        end)
+    if Nsym_ctrgrp > 1
+        respacked = reshape(res.data,sizeAp[1],sizeAp[3],sizeSp[1],:,sizeSp[3])
+        # contract_symindex!(res::Array{TU,5}, A::Array{T,3}, ::Val{sizeA13unit}, S::Array{U,3}, ::Val{sizeS13unit}, ::Val{Nsym}))
+        contract_symindex!(respacked,Apacked,Val((sizeAp[1]==1,sizeAp[3]==1)),Spacked,Val((sizeSp[1]==1,sizeSp[3]==1)),Val(Nsym_ctrgrp))
+    else
+        respacked = reshape(res.data,sizeAp[1],sizeAp[3],sizeSp[1],sizeSp[3])
+        @tensor respacked[iA1,iA3,iS1,iS3] = Apacked[iA1,ii,iA3] * Spacked[iS1,ii,iS3]
     end
-
-    code = quote
-        check_contraction_compatibility(res,A,S,Val($nA),Val($nS))
-        res.data .= zero(TU)
-    end
-    if NA>1
-        Aresinds = ((1:nA-1)...,(nA+1:NA)...)
-        Aressizes = (i->:(size(A,$i))).(Aresinds)
-        push!(code.args, :( Aloopinds = CartesianIndices(($(Aressizes...),)) ))
-    end
-    push!(code.args,quote
-        @inbounds for (v,indsS) in zip(S.data,CartesianIndices(S))
-            $loopcode
-        end
-    end)
-    #display(code)
-    #error("this is not supposed to be called yet!")
-    code
 end

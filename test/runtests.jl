@@ -1,6 +1,6 @@
 using Test
 using SymArrays
-using SymArrays: symarrlength, _sub2ind
+using SymArrays: symarrlength, _sub2ind, symgrp_info
 using TensorOperations
 using Random
 
@@ -9,7 +9,7 @@ using Random
         # Write your own tests here.
         @test symarrlength((3,6,4,3),(3,2,1,3)) == 8400
 
-        S = SymArray{(2,),Float64}(5,5);
+        S = SymArray{(2,),Float64}(5,5)
         @test _sub2ind(S,2,5) == _sub2ind(S,5,2)
         @test _sub2ind(S,3,4) != _sub2ind(S,5,3)
         # _sub2ind has to have same number of arguments as size of N
@@ -18,7 +18,7 @@ using Random
         @test S[3,5,1] == S[3,5]
         @test_throws BoundsError S[3,5,3]
 
-        S = SymArray{(3,1,2,2),Float64}(3,3,3,2,4,4,4,4);
+        S = SymArray{(3,1,2,2),Float64}(3,3,3,2,4,4,4,4)
         @test size(S) == (3,3,3,2,4,4,4,4)
         @test length(S) == 2000
         # iterating over all indices should give only the distinct indices,
@@ -56,7 +56,7 @@ using Random
         end
 
         A = rand(5,5)
-        @assert A' != A
+        @test A' != A
         @test SymArray{(1,1)}(A) == A
         @test SymArray{(2,)}(A) != A
 
@@ -83,6 +83,14 @@ using Random
         # but if called without sizes, the copy constructor should be used
         S = SymArray{(1,)}(A)
         @test S.data !== A
+    end
+
+    @testset "symgrp_info" begin
+        S = SymArray{(3,2),Float64}(5,5,5,3,3)
+        @test symgrp_info(S,1) == (1,3,1)
+        @test symgrp_info(S,3) == (1,3,1)
+        @test symgrp_info(S,4) == (2,2,4)
+        @test symgrp_info(S,5) == (2,2,4)
     end
 
     @testset "Contractions" begin

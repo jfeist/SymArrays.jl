@@ -89,6 +89,15 @@ macro symind_binomial(ii,n::Integer,offset::Integer)
     end
 end
 
+@inline @generated function symgrp_sortedsub2ind(I::Vararg{T,Nsym})::T where {Nsym,T<:Integer}
+    indexpr = :( I[1] )
+    for ndim = 2:Nsym
+        # calculate binomial(i_n+ndim-2,ndim)
+        indexpr = :( $indexpr + @symind_binomial(I[$ndim],$ndim,-2) )
+    end
+    return indexpr
+end
+
 @generated _sub2ind(A::SymArray{Nsyms,T,N}, I::Vararg{Int,M}) where {Nsyms,T,N,M} = begin
     N==M || error("_sub2ind(::SymArray): number of indices $M != number of dimensions $N")
     body = quote
@@ -98,18 +107,11 @@ end
     end
     ii::Int = 0
     for (iN,Nsym) in enumerate(Nsyms)
-        isyms = Symbol.(:i,1:Nsym)
         Ilocs = ( :( I[$(ii+=1)] ) for _=1:Nsym)
-        indexpr = :( $(isyms[1])-1 )
-        for (inum,isym) in enumerate(isyms[2:end])
-            # calculate binomial(i_n+ndim-2,ndim)
-            # ndim = inum+1 (enumerate starts at 1 for dimension 2)
-            indexpr = :( $indexpr + @symind_binomial($isym,$(inum+1),-2) )
-        end
         expr = quote
             Nt = A.Nts[$iN]
-            ($(isyms...),) = TupleTools.sort(($(Ilocs...),))
-            ind += $indexpr * stride
+            grpind = symgrp_sortedsub2ind(TupleTools.sort(($(Ilocs...),))...)
+            ind += (grpind-1) * stride
             # stride is binomial(Nt+Nsym-1,Nsym) (total size of the symmetric block)
             stride *= @symind_binomial(Nt,$Nsym,-1)
         end

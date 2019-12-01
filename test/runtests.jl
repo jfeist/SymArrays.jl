@@ -86,50 +86,81 @@ using Random
     end
 
     @testset "Contractions" begin
-        N,M,O = 10, 15, 18
-        for T in (Float64,ComplexF64)
-            A = rand(T,N)
+        @testset "Manual" begin
+            N,M,O = 10, 15, 18
+            for T in (Float64,ComplexF64)
+                A = rand(T,N)
 
-            for U in (Float64,ComplexF64)
-                for (n,dims) in enumerate([(N,M,O),(O,N,M),(M,O,N)])
-                    B = rand(U,dims...)
-                    n==1 && (@tensor D1[j,k] := A[i]*B[i,j,k])
-                    n==2 && (@tensor D1[j,k] := A[i]*B[j,i,k])
-                    n==3 && (@tensor D1[j,k] := A[i]*B[j,k,i])
-                    D2 = contract(A,B,Val(n))
-                    @test D1 ≈ D2
-                    if T==U
-                        contract!(D2,A,B,Val(n))
+                for U in (Float64,ComplexF64)
+                    for (n,dims) in enumerate([(N,M,O),(O,N,M),(M,O,N)])
+                        B = rand(U,dims...)
+                        n==1 && (@tensor D1[j,k] := A[i]*B[i,j,k])
+                        n==2 && (@tensor D1[j,k] := A[i]*B[j,i,k])
+                        n==3 && (@tensor D1[j,k] := A[i]*B[j,k,i])
+                        D2 = contract(A,B,Val(n))
                         @test D1 ≈ D2
-                    else
-                        @test_throws MethodError contract!(D2,A,B,Val(n))
+                        if T==U
+                            contract!(D2,A,B,Val(n))
+                            @test D1 ≈ D2
+                        else
+                            @test_throws MethodError contract!(D2,A,B,Val(n))
+                        end
+                    end
+
+                    S = SymArray{(3,),U}(N,N,N)
+                    rand!(S.data)
+                    B = collect(S)
+                    @test contract(A,S,Val(1)) == contract(A,S,Val(2))
+                    @test contract(A,S,Val(1)) == contract(A,S,Val(3))
+                    for n = 1:3
+                        @test collect(contract(A,S,Val(n))) ≈ contract(A,B,Val(n))
+                    end
+
+                    S = SymArray{(2,1),U}(N,N,N)
+                    rand!(S.data)
+                    B = collect(S)
+                    @test contract(A,S,Val(1)) == contract(A,S,Val(2))
+                    for n = 1:3
+                        @test collect(contract(A,S,Val(n))) ≈ contract(A,B,Val(n))
+                    end
+                    @test !(collect(contract(A,S,Val(1))) ≈ collect(contract(A,S,Val(3))))
+
+                    S = SymArray{(2,),U}(N,N)
+                    rand!(S.data)
+                    B = collect(S)
+                    @test contract(A,S,Val(1)) ≈ contract(A,S,Val(2))
+                    for n = 1:2
+                        @test collect(contract(A,S,Val(n))) ≈ contract(A,B,Val(n))
                     end
                 end
+            end
+        end
+        @testset "Generated" begin
+            # use small dimension sizes here so the tests do not take too long
+            N,M,O = 4, 5, 6
+            for T in (Float64,ComplexF64)
+                A = rand(T,N,M,O)
+                for U in (Float64,ComplexF64)
+                    S = SymArray{(2,3,1),U}(M,M,N,N,N,O)
+                    rand!(S.data)
+                    B = collect(S)
 
-                S = SymArray{(3,),U}(N,N,N)
-                rand!(S.data)
-                B = collect(S)
-                @test contract(A,S,Val(1)) == contract(A,S,Val(2))
-                @test contract(A,S,Val(1)) == contract(A,S,Val(3))
-                for n = 1:3
-                    @test collect(contract(A,S,Val(n))) ≈ contract(A,B,Val(n))
-                end
+                    TU = promote_type(U,T)
+                    res21 = SymArray{(1,1,1,3,1),TU}(N,O,M,N,N,N,O)
+                    contract!(res21,A,S,Val(2),Val(1))
+                    @tensor res21_tst[i,k,l,m,n,o,p] := A[i,j,k] * B[j,l,m,n,o,p]
+                    @test collect(res21) ≈ res21_tst
 
-                S = SymArray{(2,1),U}(N,N,N)
-                rand!(S.data)
-                B = collect(S)
-                @test contract(A,S,Val(1)) == contract(A,S,Val(2))
-                for n = 1:3
-                    @test collect(contract(A,S,Val(n))) ≈ contract(A,B,Val(n))
-                end
-                @test !(collect(contract(A,S,Val(1))) ≈ collect(contract(A,S,Val(3))))
+                    res13 = SymArray{(1,1,2,2,1),TU}(M,O,M,M,N,N,O)
+                    contract!(res13,A,S,Val(1),Val(3))
+                    @tensor res13_tst[j,k,l,m,n,o,p] := A[i,j,k] * B[l,m,i,n,o,p]
+                    @test collect(res13) ≈ res13_tst
 
-                S = SymArray{(2,),U}(N,N)
-                rand!(S.data)
-                B = collect(S)
-                @test contract(A,S,Val(1)) ≈ contract(A,S,Val(2))
-                for n = 1:2
-                    @test collect(contract(A,S,Val(n))) ≈ contract(A,B,Val(n))
+                    # dimension 3, 4, and 5 should be equivalent
+                    contract!(res13,A,S,Val(1),Val(4))
+                    @test collect(res13) ≈ res13_tst
+                    contract!(res13,A,S,Val(1),Val(5))
+                    @test collect(res13) ≈ res13_tst
                 end
             end
         end

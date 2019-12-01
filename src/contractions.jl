@@ -131,7 +131,7 @@ end
 function contract(A::StridedVector{T},B::StridedArray{U,N},::Val{n}) where {T,U,N,n}
     TU = promote_type(T,U)
     @assert 1 <= n <= N
-    
+
     resdims = size(B)[1:N .!= n]
     res = similar(B,TU,resdims)
 
@@ -165,7 +165,7 @@ function contract!(res::StridedArray{TU},A::StridedVector{TU},B::StridedArray{TU
         ii += 1
         @assert size(B,jj) == size(res,ii)
     end
-    
+
     if n==1      # A[i]*B[i,...]
         mygemv!('T',one(TU),reshape(B,nsum,:),A,zero(TU),vec(res))
     elseif n==N  # B[...,i]*A[i]
@@ -179,61 +179,110 @@ function contract!(res::StridedArray{TU},A::StridedVector{TU},B::StridedArray{TU
     res
 end
 
-function contract_gen!(res::SymArray{NsymsC,TU}, A::Array{T,NA}, S::SymArray{NsymsS,U}, ::Val{nA}, ::Val{nS}) where {T,U,TU,NsymsS,NsymsC,NA,nA,nS}
-    # only loop over S once, and put all the values where they should go
+"""return the symmetry group index, the number of symmetric indices in the group, and the first index of the group"""
+@inline symgrp_info(S::T,nS) where T<:SymArray = symgrp_info(T,nS)
+@inline @generated function symgrp_info(::Type{<:SymArray{Nsyms}},nS) where Nsyms
+    grps = ()
+    grpstarts = ()
+    grpstart = 1
+    for (ii,Nsym) in enumerate(Nsyms)
+        grps = (grps...,ntuple(_->ii,Nsym)...)
+        grpstarts = (grpstarts...,ntuple(_->grpstart,Nsym)...)
+        grpstart += Nsym
+    end
 
-    # we contract one dimension from each array
-    @assert sum(NsymsC) == sum(NsymsS)+NA-2
-    
-    sizeA = size(A)
-    sizeS = size(S)
-    @assert sizeA[nA] == sizeS[nS]
-    NtsS = S.Nts
-    contracted_group, Nsym_ctrgrp, nS_1 = symgroup(S,nS)
+    quote
+        ng = $grps[nS]
+        ng, $Nsyms[ng], $grpstarts[nS]
+    end
+end
+
+"""Check if the arguments correspond to a valid contraction. Do all "static" checks at compile time."""
+@generated function check_contraction_compatibility(res::SymArray{Nsymsres,TU}, A::Array{T,NA}, S::SymArray{NsymsS,U}, ::Val{nA}, ::Val{nS}) where {T,U,TU,NsymsS,Nsymsres,NA,nA,nS}
+    promote_type(T,U) <: TU || error("element types not compatible: T = $T, U = $U, TU = $TU")
+
+    contracted_group, Nsym_ctrgrp, nS_1 = symgrp_info(S,nS)
     NsymsA_contracted = ntuple(_->1,NA-1)
-    NtsA_contracted = TupleTools.deleteat(sizeA,nA)
     if Nsym_ctrgrp == 1
         NsymsS_contracted = TupleTools.deleteat(NsymsS,contracted_group)
-        NtsS_contracted = TupleTools.deleteat(NtsS,contracted_group)
     else
         NsymsS_contracted = Base.setindex(NsymsS,Nsym_ctrgrp-1,contracted_group)
-        NtsS_contracted = NtsS
     end
-    NsymsC_check = (NsymsA_contracted...,NsymsS_contracted...)
-    NtsC_check = (NtsA_contracted...,NtsS_contracted...)
-    @assert NsymsC_check == NsymsC
-    @assert NtsC_check == res.Nts
-    
-    if NA>1
-        Aindexp = ntuple(i->i==nA ? 1 : Colon(),NA)
-        Aloopinds = CartesianIndices(A[Aindexp...])
-    else
-        Aloopinds = ((),)
-    end 
-    
-    res.data .= 0
-    @inbounds for (v,indsS) in zip(S.data,CartesianIndices(S))
-        IS = Tuple(indsS)
-        isum = IS[nS_1]
-        IresS = TupleTools.deleteat(IS,nS_1)
-        for indsresA in Aloopinds
-            IresA = Tuple(indsresA)
-            Aprevinds = IresA[1:nA-1]
-            Apostinds = IresA[nA:end]
-            res[IresA...,IresS...] += v * A[Aprevinds...,isum,Apostinds...]
-        end
-        for nS_exc = nS_1 : nS_1+Nsym_ctrgrp-2
-            if IS[nS_exc] < IS[nS_exc+1]
-                isum = IS[nS_exc+1]
-                IresS = TupleTools.deleteat(IS,nS_exc+1)
+    Nsymsres_check = (NsymsA_contracted...,NsymsS_contracted...)
+    # assure that symmetry structure is compatible
+    errmsg = "symmetry structure not compatible:"
+    errmsg *= "\nNA = $NA, NsymsS = $NsymsS, nA = $nA, nS = $nS"
+    errmsg *= "\nNsymsres = $Nsymsres, expected Nsymssres = $Nsymsres_check"
+    Nsymsres == Nsymsres_check || error(errmsg)
+
+    Sresinds = ((1:nS-1)...,(nS+1:sum(NsymsS))...)
+    Aresinds = ((1:nA-1)...,(nA+1:NA)...)
+    sizerescheck = ((i->:(sizeA[$i])).(Aresinds)...,
+                    (i->:(sizeS[$i])).(Sresinds)...)
+    code = quote
+        sizeA = size(A)
+        sizeS = size(S)
+        @assert sizeA[$nA] == sizeS[$nS]
+        @assert size(res) == ($(sizerescheck...),)
+    end
+    #display(code)
+    code
+end
+
+@generated function contract!(res::SymArray{Nsymsres,TU}, A::Array{T,NA}, S::SymArray{NsymsS,U}, ::Val{nA}, ::Val{nS}) where {T,U,TU,NsymsS,Nsymsres,NA,nA,nS}
+    # only loop over S once, and put all the values where they should go
+
+    contracted_group, Nsym_ctrgrp, nS_1 = symgrp_info(S,nS)
+
+    iresAsyms = Tuple(Symbol.(:iresA,1:NA-1))
+    Aloopcode = (isum,IresS) -> begin
+        if NA>1
+            Aprevinds = iresAsyms[1:nA-1]
+            Apostinds = iresAsyms[nA:NA-1]
+            quote
                 for indsresA in Aloopinds
-                    IresA = Tuple(indsresA)
-                    Aprevinds = IresA[1:nA-1]
-                    Apostinds = IresA[nA:end]
-                    res[IresA...,IresS...] += v * A[Aprevinds...,isum,Apostinds...]
+                    ($(iresAsyms...),) = Tuple(indsresA)
+                    res[$(iresAsyms...),$(IresS...)] += v * A[$(Aprevinds...),$isum,$(Apostinds...)]
                 end
             end
+        else
+            :( res[$(IresS...)] += v * A[$isum] )
         end
     end
-    res
+
+    iSsyms = Tuple(Symbol.(:iS,1:sum(NsymsS)))
+    nStermcode = nS -> begin
+        isum = iSsyms[nS]
+        IresS = TupleTools.deleteat(iSsyms,nS)
+        Aloopcode(isum,IresS)
+    end
+
+    loopcode = Expr(:block)
+    push!(loopcode.args, :( ($(iSsyms...),) = Tuple(indsS) ) )
+    push!(loopcode.args, nStermcode(nS_1))
+    for nS_exc = nS_1 : nS_1+Nsym_ctrgrp-2
+        push!(loopcode.args, quote
+            if $(iSsyms[nS_exc]) < $(iSsyms[nS_exc+1])
+                $(nStermcode(nS_exc+1))
+            end
+        end)
+    end
+
+    code = quote
+        check_contraction_compatibility(res,A,S,Val($nA),Val($nS))
+        res.data .= zero(TU)
+    end
+    if NA>1
+        Aresinds = ((1:nA-1)...,(nA+1:NA)...)
+        Aressizes = (i->:(size(A,$i))).(Aresinds)
+        push!(code.args, :( Aloopinds = CartesianIndices(($(Aressizes...),)) ))
+    end
+    push!(code.args,quote
+        @inbounds for (v,indsS) in zip(S.data,CartesianIndices(S))
+            $loopcode
+        end
+    end)
+    #display(code)
+    #error("this is not supposed to be called yet!")
+    code
 end

@@ -1,6 +1,6 @@
 using Test
 using SymArrays
-using SymArrays: symarrlength, _sub2ind, symgrp_info
+using SymArrays: symarrlength, _sub2ind, which_symgrp
 using TensorOperations
 using Random
 
@@ -85,12 +85,12 @@ using Random
         @test S.data !== A
     end
 
-    @testset "symgrp_info" begin
+    @testset "which_symgrp" begin
         S = SymArray{(3,2),Float64}(5,5,5,3,3)
-        @test symgrp_info(S,1) == (1,3,1)
-        @test symgrp_info(S,3) == (1,3,1)
-        @test symgrp_info(S,4) == (2,2,4)
-        @test symgrp_info(S,5) == (2,2,4)
+        @test which_symgrp(S,1) == (1,3)
+        @test which_symgrp(S,3) == (1,3)
+        @test which_symgrp(S,4) == (2,2)
+        @test which_symgrp(S,5) == (2,2)
     end
 
     @testset "Contractions" begin

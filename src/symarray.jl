@@ -1,8 +1,11 @@
 import Base: size, getindex, setindex!, iterate, length, eachindex, CartesianIndices, tail, IndexStyle, copyto!, _sub2ind
 using TupleTools
 
+"size of a single symmetric group with Nsym dimensions and size Nt per dimension"
+symgrp_size(Nt,Nsym) = binomial(Nt-1+Nsym, Nsym);
+
 # calculates the length of a SymArray
-symarrlength(Nts,Nsyms) = prod(binomial(Nt-1+Nsym, Nsym) for (Nt,Nsym) in zip(Nts,Nsyms))
+symarrlength(Nts,Nsyms) = prod(symgrp_size.(Nts,Nsyms))
 
 struct SymArray{Nsyms,T,N,M,VecType<:AbstractVector} <: AbstractArray{T,N}
     data::VecType

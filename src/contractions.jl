@@ -179,21 +179,17 @@ function contract!(res::StridedArray{TU},A::StridedVector{TU},B::StridedArray{TU
     res
 end
 
-"""return the symmetry group index, the number of symmetric indices in the group, and the first index of the group"""
-@inline symgrp_info(S::T,nS) where T<:SymArray = symgrp_info(T,nS)
-@inline @generated function symgrp_info(::Type{<:SymArray{Nsyms}},nS) where Nsyms
+"""return the symmetry group index and the number of symmetric indices in the group"""
+@inline which_symgrp(S::T,nS) where T<:SymArray = which_symgrp(T,nS)
+@inline @generated function which_symgrp(::Type{<:SymArray{Nsyms}},nS) where Nsyms
     grps = ()
-    grpstarts = ()
-    grpstart = 1
     for (ii,Nsym) in enumerate(Nsyms)
         grps = (grps...,ntuple(_->ii,Nsym)...)
-        grpstarts = (grpstarts...,ntuple(_->grpstart,Nsym)...)
-        grpstart += Nsym
     end
 
     quote
         ng = $grps[nS]
-        ng, $Nsyms[ng], $grpstarts[nS]
+        ng, $Nsyms[ng]
     end
 end
 
@@ -201,7 +197,7 @@ end
 @generated function check_contraction_compatibility(res::SymArray{Nsymsres,TU}, A::Array{T,NA}, S::SymArray{NsymsS,U}, ::Val{nA}, ::Val{nS}) where {T,U,TU,NsymsS,Nsymsres,NA,nA,nS}
     promote_type(T,U) <: TU || error("element types not compatible: T = $T, U = $U, TU = $TU")
 
-    contracted_group, Nsym_ctrgrp, nS_1 = symgrp_info(S,nS)
+    contracted_group, Nsym_ctrgrp = which_symgrp(S,nS)
     NsymsA_contracted = ntuple(_->1,NA-1)
     if Nsym_ctrgrp == 1
         NsymsS_contracted = TupleTools.deleteat(NsymsS,contracted_group)
@@ -281,7 +277,6 @@ res[iAprev,iApost,iSprev,Icntrct-1,ISpost]
     code
 end
 
-symgrpsize(Nsym,Nt) = binomial(Nt-1+Nsym, Nsym);
 "calculates a new shape for an array with size sizeA where all indices left and right of nA are collapsed together"
 newsize_centered(sizeA,nA) = (prod(sizeA[1:nA-1]),sizeA[nA],prod(sizeA[nA+1:end]))
 
@@ -289,12 +284,12 @@ function contract!(res::SymArray{Nsymsres,TU}, A::Array{T,NA}, S::SymArray{Nsyms
     # first check that all the sizes are compatible etc
     check_contraction_compatibility(res,A,S,Val(nA),Val(nS))
 
-    contracted_group, Nsym_ctrgrp, nS_1 = symgrp_info(S,nS)
+    contracted_group, Nsym_ctrgrp = which_symgrp(S,nS)
 
     sizeAp = newsize_centered(size(A),nA)
     Apacked = reshape(A,sizeAp)
 
-    grpsizeS = symgrpsize.(NsymsS,S.Nts)
+    grpsizeS = symgrp_size.(S.Nts,NsymsS)
     sizeSp = newsize_centered(grpsizeS, contracted_group)
     Spacked = reshape(S.data,sizeSp)
 

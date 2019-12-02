@@ -236,14 +236,10 @@ res[iAprev,iApost,iSprev,Icntrct-1,ISpost]
     # combined (Nsym-1)-dimensional index for the Nsym possible permutations
     iSm2s = Tuple(Symbol.(:iSm2_,1:Nsym))
 
-    iAsetters = quote
-        $(iSm2s[1]) = symgrp_sortedsub2ind($(tail(iS2s)...))
-    end
-    iAusers = quote
-        res[iA1,iA3,iS1,$(iSm2s[1]),iS3] += v * A[iA1,$(iS2s[1]),iA3]
-    end
-    for n = 2:Nsym
-        chk = :( $(iS2s[n-1])<$(iS2s[n]) )
+    iAsetters = Expr(:block)
+    iAusers = Expr(:block)
+    for n = 1:Nsym
+        chk = n==1 ? true : :( $(iS2s[n-1])<$(iS2s[n]) )
         syminds = TupleTools.deleteat(iS2s,n)
         push!(iAsetters.args, :( $chk && ($(iSm2s[n]) = symgrp_sortedsub2ind($(syminds...))) ))
         push!(iAusers.args, :( $chk && (res[iA1,iA3,iS1,$(iSm2s[n]),iS3] += v * A[iA1,$(iS2s[n]),iA3]) ))
@@ -256,7 +252,7 @@ res[iAprev,iApost,iSprev,Icntrct-1,ISpost]
 
     code = quote
         # size of iterated index is middle index of A
-        iterdimS = SymIndexIter(Nsym,size(A,2))
+        iterdimS = SymIndexIter($Nsym,size(A,2))
 
         res .= zero(TU)
         @inbounds for iS3 = 1:$iS3max
@@ -277,28 +273,39 @@ res[iAprev,iApost,iSprev,Icntrct-1,ISpost]
     code
 end
 
-"calculates a new shape for an array with size sizeA where all indices left and right of nA are collapsed together"
-newsize_centered(sizeA,nA) = (prod(sizeA[1:nA-1]),sizeA[nA],prod(sizeA[nA+1:end]))
-
-function contract!(res::SymArray{Nsymsres,TU}, A::Array{T,NA}, S::SymArray{NsymsS,U}, ::Val{nA}, ::Val{nS}) where {T,U,TU,NsymsS,Nsymsres,NA,nA,nS}
-    # first check that all the sizes are compatible etc
-    check_contraction_compatibility(res,A,S,Val(nA),Val(nS))
-
+@generated function contract!(res::SymArray{Nsymsres,TU}, A::Array{T,NA}, S::SymArray{NsymsS,U}, ::Val{nA}, ::Val{nS}) where {T,U,TU,NsymsS,Nsymsres,NA,nA,nS}
     contracted_group, Nsym_ctrgrp = which_symgrp(S,nS)
-
-    sizeAp = newsize_centered(size(A),nA)
-    Apacked = reshape(A,sizeAp)
-
-    grpsizeS = symgrp_size.(S.Nts,NsymsS)
-    sizeSp = newsize_centered(grpsizeS, contracted_group)
-    Spacked = reshape(S.data,sizeSp)
-
-    if Nsym_ctrgrp > 1
-        respacked = reshape(res.data,sizeAp[1],sizeAp[3],sizeSp[1],:,sizeSp[3])
-        # contract_symindex!(res::Array{TU,5}, A::Array{T,3}, ::Val{sizeA13unit}, S::Array{U,3}, ::Val{sizeS13unit}, ::Val{Nsym}))
-        contract_symindex!(respacked,Apacked,Val((sizeAp[1]==1,sizeAp[3]==1)),Spacked,Val((sizeSp[1]==1,sizeSp[3]==1)),Val(Nsym_ctrgrp))
-    else
-        respacked = reshape(res.data,sizeAp[1],sizeAp[3],sizeSp[1],sizeSp[3])
-        @tensor respacked[iA1,iA3,iS1,iS3] = Apacked[iA1,ii,iA3] * Spacked[iS1,ii,iS3]
+    sizeA13unit = (nA==1,nA==NA)
+    sizeS13unit = (contracted_group==1,contracted_group==length(NsymsS))
+    newsize_centered_expr(sizeA::Symbol,nA::Int,NA::Int) = begin
+        sizeAs = [:( $sizeA[$ii] ) for ii=1:NA]
+        t1 = nA > 1 ? :( *($(sizeAs[1:nA-1]...)) ) : 1
+        t3 = nA < NA ? :( *($(sizeAs[nA+1:NA]...)) ) : 1
+        :( ($t1, $sizeA[$nA], $t3) )
     end
+    grpsizeS = [:( @symind_binomial(S.Nts[$ii],$Nsym,-1) ) for (ii,Nsym) in enumerate(NsymsS)]
+
+    code = quote
+        # first check that all the sizes are compatible etc
+        check_contraction_compatibility(res,A,S,Val($nA),Val($nS))
+
+        sizeA = size(A)
+        sizeAp = $(newsize_centered_expr(:sizeA,nA,NA))
+        Apacked = reshape(A,sizeAp)
+
+        grpsizeS = ($(grpsizeS...),)
+        sizeSp = $(newsize_centered_expr(:grpsizeS, contracted_group, length(NsymsS)))
+        Spacked = reshape(S.data,sizeSp)
+
+        if $Nsym_ctrgrp > 1
+            size_respS1 = @symind_binomial S.Nts[$contracted_group] $(Nsym_ctrgrp-1) -1
+            respacked = reshape(res.data,sizeAp[1],sizeAp[3],sizeSp[1],size_respS1,sizeSp[3])
+            contract_symindex!(respacked,Apacked,Val($sizeA13unit),Spacked,Val($sizeS13unit),Val($Nsym_ctrgrp))
+        else
+            respacked = reshape(res.data,sizeAp[1],sizeAp[3],sizeSp[1],sizeSp[3])
+            @tensor respacked[iA1,iA3,iS1,iS3] = Apacked[iA1,ii,iA3] * Spacked[iS1,ii,iS3]
+        end
+    end
+    #display(code)
+    code
 end

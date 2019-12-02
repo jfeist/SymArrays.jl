@@ -182,24 +182,24 @@ struct SymIndexIter{Nsym}
     SymIndexIter(Nsym,size) = new{Nsym}(size)
 end
 
-first(iter::SymIndexIter{Nsym}) where Nsym = CartesianIndex(ntuple(one,Nsym))
+@generated first(iter::SymIndexIter{Nsym}) where Nsym = :( $(ntuple(one,Nsym)) )
 
 @inline function iterate(iter::SymIndexIter)
     iterfirst = first(iter)
     iterfirst, iterfirst
 end
 @inline function iterate(iter::SymIndexIter, state)
-    valid, I = __inc(state.I, iter.size)
+    valid, I = __inc(state, iter.size)
     valid || return nothing
-    return CartesianIndex(I...), CartesianIndex(I...)
+    return I, I
 end
 # increment post check to avoid integer overflow
 @inline __inc(::Tuple{}, ::Tuple{}) = false, ()
 @inline function __inc(state::Tuple{Int}, size::Int)
-    valid = state[1] < size[1]
+    valid = state[1] < size
     return valid, (state[1]+1,)
 end
-@inline function __inc(state, size::Int)
+@inline function __inc(state::NTuple{N,Int}, size::Int) where N
     if state[1] < state[2]
         return true, (state[1]+1, tail(state)...)
     end

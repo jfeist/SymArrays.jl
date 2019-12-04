@@ -302,6 +302,8 @@ end
             respacked = reshape(res.data,sizeAp[1],sizeAp[3],sizeSp[1],size_respS1,sizeSp[3])
             contract_symindex!(respacked,Apacked,Val($sizeA13unit),Spacked,Val($sizeS13unit),Val($Nsym_ctrgrp))
         else
+            # iS2 is a single (not symmetric) dimension and it disappears after summing
+            # we have res[iS1,iS3,iA1,iA3] = S_iS1,k,iS3 * A_iA1,k,iA3
             respacked = reshape(res.data,sizeAp[1],sizeAp[3],sizeSp[1],sizeSp[3])
             @tensor respacked[iA1,iA3,iS1,iS3] = Apacked[iA1,ii,iA3] * Spacked[iS1,ii,iS3]
         end

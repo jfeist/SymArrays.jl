@@ -1,8 +1,8 @@
-import Base: size, getindex, setindex!, iterate, length, eachindex, CartesianIndices, tail, IndexStyle, copyto!
+import Base: size, length, ndims, getindex, setindex!, iterate, eachindex, IndexStyle, CartesianIndices, tail, copyto!
 using TupleTools
 
 "size of a single symmetric group with Nsym dimensions and size Nt per dimension"
-symgrp_size(Nt,Nsym) = binomial(Nt-1+Nsym, Nsym);
+symgrp_size(Nt,Nsym) = binomial(Nt-1+Nsym, Nsym)
 
 # calculates the length of a SymArray
 symarrlength(Nts,Nsyms) = prod(symgrp_size.(Nts,Nsyms))
@@ -132,6 +132,9 @@ getindex(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = A.data[_s
 setindex!(A::SymArray, v, i::Int) = A.data[i] = v
 setindex!(A::SymArray{Nsyms,T,N}, v, I::Vararg{Int,N}) where {Nsyms,T,N} = (A.data[_sub2grp(A,I...)...] = v);
 
+eachindex(S::SymArray) = CartesianIndices(S)
+CartesianIndices(S::SymArray) = SymArrayIter(S)
+
 @generated function lessnexts(::SymArray{Nsyms}) where Nsyms
     lessnext = ones(Bool,sum(Nsyms))
     istart = 1
@@ -148,10 +151,10 @@ struct SymArrayIter{N}
     "create an iterator that gives i1<=i2<=i3 etc for each index group"
     SymArrayIter(A::SymArray{Nsyms,T,N,M}) where {Nsyms,T,N,M} = new{N}(lessnexts(A),A.size)
 end
-eachindex(A::SymArray) = CartesianIndices(A);
-CartesianIndices(A::SymArray) = SymArrayIter(A);
-
+ndims(::SymArrayIter{N}) where N = N
+eltype(::Type{SymArrayIter{N}}) where N = NTuple{N,Int}
 first(iter::SymArrayIter) = CartesianIndex(map(one, iter.sizes))
+last(iter::SymArrayIter) = CartesianIndex(iter.sizes...)
 
 @inline function iterate(iter::SymArrayIter)
     iterfirst = first(iter)
@@ -183,8 +186,11 @@ struct SymIndexIter{Nsym}
     "create an iterator that gives i1<=i2<=i3 etc for one index group"
     SymIndexIter(Nsym,size) = new{Nsym}(size)
 end
-
-@generated first(iter::SymIndexIter{Nsym}) where Nsym = :( $(ntuple(one,Nsym)) )
+ndims(::SymIndexIter{Nsym}) where Nsym = Nsym
+eltype(::Type{SymIndexIter{Nsym}}) where Nsym = NTuple{Nsym,Int}
+length(iter::SymIndexIter{Nsym}) where Nsym = symgrp_size(iter.size,Nsym)
+first(iter::SymIndexIter{Nsym}) where Nsym = ntuple(one,Val(Nsym))
+last(iter::SymIndexIter{Nsym}) where Nsym = ntuple(i->iter.size,Val(Nsym))
 
 @inline function iterate(iter::SymIndexIter)
     iterfirst = first(iter)

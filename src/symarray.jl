@@ -1,4 +1,4 @@
-import Base: size, getindex, setindex!, iterate, length, eachindex, CartesianIndices, tail, IndexStyle, copyto!, _sub2ind
+import Base: size, getindex, setindex!, iterate, length, eachindex, CartesianIndices, tail, IndexStyle, copyto!
 using TupleTools
 
 "size of a single symmetric group with Nsym dimensions and size Nt per dimension"
@@ -7,33 +7,47 @@ symgrp_size(Nt,Nsym) = binomial(Nt-1+Nsym, Nsym);
 # calculates the length of a SymArray
 symarrlength(Nts,Nsyms) = prod(symgrp_size.(Nts,Nsyms))
 
-struct SymArray{Nsyms,T,N,M,VecType<:AbstractVector} <: AbstractArray{T,N}
-    data::VecType
+@generated function _getNts(::Val{Nsyms},size::NTuple{N,Int}) where {Nsyms,N}
+    @assert sum(Nsyms)==N
+    symdims = cumsum(collect((1,Nsyms...)))
+    Nts = [ :( size[$ii] ) for ii in symdims[1:end-1]]
+    code = quote
+        Nts = ($(Nts...),)
+    end
+    err = :( error("SymArray: sizes $size not compatible with symmetry numbers $Nsyms") )
+    for ii = 1:length(Nsyms)
+        dd = [ :( size[$jj] ) for jj=symdims[ii]:symdims[ii+1]-1 ]
+        push!(code.args,:( all(($(dd...),) .== Nts[$ii]) || $err ))
+    end
+    push!(code.args, :( Nts ))
+    code
+end
+
+struct SymArray{Nsyms,T,N,M,datType<:AbstractArray} <: AbstractArray{T,N}
+    data::datType
     size::NTuple{N,Int}
     Nts::NTuple{M,Int}
     function SymArray{Nsyms,T}(size::Vararg{Int,N}) where {Nsyms,T,N}
-        @assert sum(Nsyms)==N
-        ii::Int = 0
-        f = i -> (ii+=Nsyms[i]; size[ii])
-        Nts = ntuple(f,length(Nsyms))
-        len = symarrlength(Nts,Nsyms)
-        data = Vector{T}(undef,len)
-        new{Nsyms,T,N,length(Nsyms),Vector{T}}(data,size,Nts)
+        Nts = _getNts(Val(Nsyms),size)
+        M = length(Nsyms)
+        data = Array{T,M}(undef,symgrp_size.(Nts,Nsyms)...)
+        new{Nsyms,T,N,M,typeof(data)}(data,size,Nts)
     end
     # this creates a SymArray that serves as a view on an existing vector
-    function SymArray{Nsyms}(data::VecType,size::Vararg{Int,N}) where {Nsyms,N,VecType<:AbstractVector{T}} where T
-        @assert sum(Nsyms)==N
-        ii::Int = 0
-        f = i -> (ii+=Nsyms[i]; size[ii])
-        Nts = ntuple(f,length(Nsyms))
-        len = symarrlength(Nts,Nsyms)
-        @assert length(data) == len
-        new{Nsyms,T,N,length(Nsyms),VecType}(data,size,Nts)
+    function SymArray{Nsyms}(data::datType,size::Vararg{Int,N}) where {Nsyms,N,datType<:AbstractArray{T}} where T
+        Nts = _getNts(Val(Nsyms),size)
+        @assert Base.size(data) == symgrp_size.(Nts,Nsyms)
+        new{Nsyms,T,N,length(Nsyms),datType}(data,size,Nts)
     end
 end
 
 size(A::SymArray) = A.size
 length(A::SymArray) = length(A.data)
+
+symgrp_size(S::SymArray{Nsyms}) where Nsyms = symgrp_size.(S.Nts,Nsyms)
+symgrp_size(S::SymArray{Nsyms},d::Integer) where Nsyms = symgrp_size(S.Nts[d],Nsyms[d])
+symgrps(S::SymArray{Nsyms}) where Nsyms = Nsyms
+nsymgrps(S::SymArray{Nsyms,T,N,M}) where {Nsyms,T,N,M} = M
 
 copyto!(S::SymArray,A::AbstractArray) = begin
     @assert size(S) == size(A)
@@ -101,34 +115,22 @@ end
     return indexpr
 end
 
-@generated _sub2ind(A::SymArray{Nsyms,T,N}, I::Vararg{Int,M}) where {Nsyms,T,N,M} = begin
-    N==M || error("_sub2ind(::SymArray): number of indices $M != number of dimensions $N")
-    body = quote
-        stride::Int = 1
-        ind::Int = 1
-        Nt::Int = 0
-    end
+@generated _sub2grp(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = begin
+    result = ()
     ii::Int = 0
     for (iN,Nsym) in enumerate(Nsyms)
         Ilocs = ( :( I[$(ii+=1)] ) for _=1:Nsym)
-        expr = quote
-            Nt = A.Nts[$iN]
-            grpind = symgrp_sortedsub2ind(TupleTools.sort(($(Ilocs...),))...)
-            ind += (grpind-1) * stride
-            # stride is binomial(Nt+Nsym-1,Nsym) (total size of the symmetric block)
-            stride *= @symind_binomial(Nt,$Nsym,-1)
-        end
-        push!(body.args,expr)
+        result = (result..., :( symgrp_sortedsub2ind(TupleTools.sort(($(Ilocs...),))...) ) )
     end
-    push!(body.args,:( ind ))
-    body
+    code = :( ($(result...),) )
+    code
 end
 
 IndexStyle(::Type{<:SymArray}) = IndexCartesian()
 getindex(A::SymArray, i::Int) = A.data[i]
-getindex(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = A.data[_sub2ind(A,I...)]
+getindex(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = A.data[_sub2grp(A,I...)...]
 setindex!(A::SymArray, v, i::Int) = A.data[i] = v
-setindex!(A::SymArray{Nsyms,T,N}, v, I::Vararg{Int,N}) where {Nsyms,T,N} = (A.data[_sub2ind(A,I...)] = v);
+setindex!(A::SymArray{Nsyms,T,N}, v, I::Vararg{Int,N}) where {Nsyms,T,N} = (A.data[_sub2grp(A,I...)...] = v);
 
 @generated function lessnexts(::SymArray{Nsyms}) where Nsyms
     lessnext = ones(Bool,sum(Nsyms))

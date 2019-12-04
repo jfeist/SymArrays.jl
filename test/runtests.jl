@@ -1,6 +1,6 @@
 using Test
 using SymArrays
-using SymArrays: symarrlength, _sub2ind, which_symgrp
+using SymArrays: symarrlength, _sub2grp, which_symgrp
 using TensorOperations
 using Random
 
@@ -10,10 +10,10 @@ using Random
         @test symarrlength((3,6,4,3),(3,2,1,3)) == 8400
 
         S = SymArray{(2,),Float64}(5,5)
-        @test _sub2ind(S,2,5) == _sub2ind(S,5,2)
-        @test _sub2ind(S,3,4) != _sub2ind(S,5,3)
-        # _sub2ind has to have same number of arguments as size of N
-        @test_throws ErrorException _sub2ind(S,3,5,1)
+        @test _sub2grp(S,2,5) == _sub2grp(S,5,2)
+        @test _sub2grp(S,3,4) != _sub2grp(S,5,3)
+        # _sub2grp has to have same number of arguments as size of N
+        @test_throws MethodError _sub2grp(S,3,5,1)
         # indexing the array allows having additional 1s at the end
         @test S[3,5,1] == S[3,5]
         @test_throws BoundsError S[3,5,3]
@@ -27,19 +27,19 @@ using Random
         @test sum(1 for I in eachindex(S)) == length(S)
 
         # calculating the linear index when iterating over Cartesian indices should give sequential access to the array
-        @test 1:length(S) == [(_sub2ind(S,Tuple(I)...) for I in eachindex(S))...]
+        @test 1:length(S) == [(LinearIndices(S.data)[_sub2grp(S,Tuple(I)...)...] for I in eachindex(S))...]
 
-        @testset "_sub2ind" begin
+        @testset "_sub2grp" begin
             # test that permuting exchangeable indices accesses the same array element
-            i1  = _sub2ind(S,1,2,3,1,4,3,2,1)
-            @test _sub2ind(S,2,3,1,1,4,3,2,1) == i1
-            @test _sub2ind(S,2,3,1,1,3,4,2,1) == i1
-            @test _sub2ind(S,2,3,1,1,3,4,1,2) == i1
-            @test _sub2ind(S,2,1,3,1,4,3,1,2) == i1
+            i1  = _sub2grp(S,1,2,3,1,4,3,2,1)
+            @test _sub2grp(S,2,3,1,1,4,3,2,1) == i1
+            @test _sub2grp(S,2,3,1,1,3,4,2,1) == i1
+            @test _sub2grp(S,2,3,1,1,3,4,1,2) == i1
+            @test _sub2grp(S,2,1,3,1,4,3,1,2) == i1
             # make sure that swapping independent indices gives a different array element
-            @test _sub2ind(S,2,1,3,1,4,1,3,2) != i1
-            @test _sub2ind(S,1,2,3,2,4,3,2,1) != i1
-            @test _sub2ind(S,1,2,3,1,1,3,2,4) != i1
+            @test _sub2grp(S,2,1,3,1,4,1,3,2) != i1
+            @test _sub2grp(S,1,2,3,2,4,3,2,1) != i1
+            @test _sub2grp(S,1,2,3,1,1,3,2,4) != i1
 
             SI = eachindex(S)
             @test first(SI) == CartesianIndex(1,1,1,1,1,1,1,1)
@@ -47,11 +47,11 @@ using Random
             NN = 4
             maxNdim = 40
             for Ndim = 1:maxNdim
-                A = SymArray{(Ndim,),Float64}(ntuple(i->NN,Ndim)...)
+                S = SymArray{(Ndim,),Float64}(ntuple(i->NN,Ndim)...)
                 Is = ntuple(i->NN,Ndim)
-                @test _sub2ind(A,Is...) == length(A)
+                @test _sub2grp(S,Is...) == size(S.data)
                 Is = ntuple(i->1,Ndim)
-                @test _sub2ind(A,Is...) == 1
+                @test _sub2grp(S,Is...) == (1,)
             end
         end
 

@@ -1,4 +1,5 @@
-import Base: size, length, ndims, getindex, setindex!, iterate, eachindex, IndexStyle, CartesianIndices, tail, copyto!
+import Base: size, length, ndims, eltype, first, last
+import Base: getindex, setindex!, iterate, eachindex, IndexStyle, CartesianIndices, tail, copyto!
 using TupleTools
 
 "size of a single symmetric group with Nsym dimensions and size Nt per dimension"

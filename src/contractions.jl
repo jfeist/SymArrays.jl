@@ -194,7 +194,7 @@ end
 end
 
 """Check if the arguments correspond to a valid contraction. Do all "static" checks at compile time."""
-@generated function check_contraction_compatibility(res::SymArray{Nsymsres,TU}, A::Array{T,NA}, S::SymArray{NsymsS,U}, ::Val{nA}, ::Val{nS}) where {T,U,TU,NsymsS,Nsymsres,NA,nA,nS}
+@generated function check_contraction_compatibility(res::SymArray{Nsymsres,TU}, A::StridedArray{T,NA}, S::SymArray{NsymsS,U}, ::Val{nA}, ::Val{nS}) where {T,U,TU,NsymsS,Nsymsres,NA,nA,nS}
     promote_type(T,U) <: TU || error("element types not compatible: T = $T, U = $U, TU = $TU")
 
     contracted_group, Nsym_ctrgrp = which_symgrp(S,nS)
@@ -273,7 +273,7 @@ res[iAprev,iApost,iSprev,Icntrct-1,ISpost]
     code
 end
 
-@generated function contract!(res::SymArray{Nsymsres,TU}, A::Array{T,NA}, S::SymArray{NsymsS,U}, ::Val{nA}, ::Val{nS}) where {T,U,TU,NsymsS,Nsymsres,NA,nA,nS}
+@generated function contract!(res::SymArray{Nsymsres,TU}, A::StridedArray{T,NA}, S::SymArray{NsymsS,U}, ::Val{nA}, ::Val{nS}) where {T,U,TU,NsymsS,Nsymsres,NA,nA,nS}
     contracted_group, Nsym_ctrgrp = which_symgrp(S,nS)
     sizeA13unit = (nA==1,nA==NA)
     sizeS13unit = (contracted_group==1,contracted_group==length(NsymsS))

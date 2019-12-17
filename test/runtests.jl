@@ -3,6 +3,13 @@ using SymArrays
 using SymArrays: symarrlength, _sub2grp, which_symgrp
 using TensorOperations
 using Random
+using CUDAapi
+if has_cuda_gpu()
+    using CuArrays
+    CuArrays.allowscalar(false)
+    to_Cu(A::Array) = CuArray(A)
+    to_Cu(S::SymArray{Nsyms}) where Nsyms = SymArray{Nsyms}(CuArray(S.data),size(S)...)
+end
 
 @testset "SymArrays.jl" begin
     @testset "SymArray" begin
@@ -146,29 +153,34 @@ using Random
         @testset "Generated" begin
             # use small dimension sizes here so the tests do not take too long
             N,M,O = 4, 5, 6
-            for T in (Float64,ComplexF64)
-                A = rand(T,N,M,O)
-                for U in (Float64,ComplexF64)
-                    S = SymArray{(2,3,1),U}(M,M,N,N,N,O)
-                    rand!(S.data)
-                    B = collect(S)
+            to_devices = has_cuda_gpu() ? (identity,to_Cu) : (identity,)
 
-                    TU = promote_type(U,T)
-                    res21 = SymArray{(1,1,1,3,1),TU}(N,O,M,N,N,N,O)
-                    contract!(res21,A,S,Val(2),Val(1))
-                    @tensor res21_tst[i,k,l,m,n,o,p] := A[i,j,k] * B[j,l,m,n,o,p]
-                    @test collect(res21) ≈ res21_tst
+            for to_device in to_devices
+                for T in (Float64,ComplexF64)
+                    A = rand(T,N,M,O) |> to_device
+                    for U in (Float64,ComplexF64)
+                        S = SymArray{(2,3,1),U}(M,M,N,N,N,O) |> to_device
+                        rand!(S.data)
+                        # first collect GPU->CPU, then SymArray -> Array
+                        B = collect(collect(S)) |> to_device
 
-                    res13 = SymArray{(1,1,2,2,1),TU}(M,O,M,M,N,N,O)
-                    contract!(res13,A,S,Val(1),Val(3))
-                    @tensor res13_tst[j,k,l,m,n,o,p] := A[i,j,k] * B[l,m,i,n,o,p]
-                    @test collect(res13) ≈ res13_tst
+                        TU = promote_type(U,T)
+                        res21 = SymArray{(1,1,1,3,1),TU}(N,O,M,N,N,N,O) |> to_device
+                        contract!(res21,A,S,Val(2),Val(1))
+                        @tensor res21_tst[i,k,l,m,n,o,p] := A[i,j,k] * B[j,l,m,n,o,p]
+                        @test collect(collect(res21)) ≈ res21_tst
 
-                    # dimension 3, 4, and 5 should be equivalent
-                    contract!(res13,A,S,Val(1),Val(4))
-                    @test collect(res13) ≈ res13_tst
-                    contract!(res13,A,S,Val(1),Val(5))
-                    @test collect(res13) ≈ res13_tst
+                        res13 = SymArray{(1,1,2,2,1),TU}(M,O,M,M,N,N,O) |> to_device
+                        contract!(res13,A,S,Val(1),Val(3))
+                        @tensor res13_tst[j,k,l,m,n,o,p] := A[i,j,k] * B[l,m,i,n,o,p]
+                        @test collect(collect(res13)) ≈ res13_tst
+
+                        # dimension 3, 4, and 5 should be equivalent
+                        contract!(res13,A,S,Val(1),Val(4))
+                        @test collect(collect(res13)) ≈ res13_tst
+                        contract!(res13,A,S,Val(1),Val(5))
+                        @test collect(collect(res13)) ≈ res13_tst
+                    end
                 end
             end
         end

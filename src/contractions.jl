@@ -4,7 +4,6 @@
 
 using TensorOperations
 using LinearAlgebra
-using CUDAapi
 
 # Array[i]*SymArray[(i,j,k)]
 # indices 1, 2, and 3 are exchangeable here
@@ -112,7 +111,7 @@ end
 # Array[i]*SymArray[(i,j)]
 # this is symmetric in i1 and i2
 function contract!(res::StridedVector{TU},A::StridedVector{T},S::SymArray{(2,),U},::Union{Val{1},Val{2}}) where {T,U,TU}
-@assert size(A,1) == size(S,1)
+    @assert size(A,1) == size(S,1)
     @assert size(res,1) == size(S,1)
     res .= zero(TU)
     # only loop over S once, and put all the values where they should go
@@ -146,12 +145,6 @@ function _contract_middle!(res,A,B)
     @inbounds for k=1:size(B,3)
         mul!(@view(res[:,k]), @view(B[:,:,k]), A)
     end
-end
-
-if has_cuda_gpu()
-    using CuArrays
-    mygemv!(tA,alpha,A::CuArray,args...) = CuArrays.CUBLAS.gemv!(tA,alpha,A,args...)
-    _contract_middle!(res::CuArray,A,B) = (@tensor res[i,k] = B[i,j,k] * A[j])
 end
 
 # Array[i_n]*Array[i1,i2,i3,...,iN]
@@ -283,7 +276,6 @@ end
         t3 = nA < NA ? :( *($(sizeAs[nA+1:NA]...)) ) : 1
         :( ($t1, $sizeA[$nA], $t3) )
     end
-    grpsizeS = [:( @symind_binomial(S.Nts[$ii],$Nsym,-1) ) for (ii,Nsym) in enumerate(NsymsS)]
 
     code = quote
         # first check that all the sizes are compatible etc
@@ -293,12 +285,12 @@ end
         sizeAp = $(newsize_centered_expr(:sizeA,nA,NA))
         Apacked = reshape(A,sizeAp)
 
-        grpsizeS = ($(grpsizeS...),)
+        grpsizeS = symgrp_size.(S.Nts,Val.(NsymsS))
         sizeSp = $(newsize_centered_expr(:grpsizeS, contracted_group, length(NsymsS)))
         Spacked = reshape(S.data,sizeSp)
 
         if $Nsym_ctrgrp > 1
-            size_respS1 = @symind_binomial S.Nts[$contracted_group] $(Nsym_ctrgrp-1) -1
+            size_respS1 = symgrp_size(S.Nts[$contracted_group],Val($(Nsym_ctrgrp-1)))
             respacked = reshape(res.data,sizeAp[1],sizeAp[3],sizeSp[1],size_respS1,sizeSp[3])
             contract_symindex!(respacked,Apacked,Val($sizeA13unit),Spacked,Val($sizeS13unit),Val($Nsym_ctrgrp))
         else

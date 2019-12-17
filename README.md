@@ -16,5 +16,5 @@ S = SymArray{(3,1,2,1),Float64}(10,10,10,3,50,50,50)
 declares an array `S[(i,j,k),l,(m,n),o]` where any permutation of `(i,j,k)` leaves the value unchanged, as does any permutation of `(m,n)`. Note that interchangeable indices obviously have to have the same size.
 
 ## TODO:
-- Check bounds violations when accessing matrix elements 
+- Check bounds violations when accessing matrix elements
 - Allow specification and treatment of Hermitian indices, where any permutation conjugates the result (possibly only for 2 indices at a time?).

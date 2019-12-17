@@ -3,7 +3,8 @@ import Base: getindex, setindex!, iterate, eachindex, IndexStyle, CartesianIndic
 using TupleTools
 
 "size of a single symmetric group with Nsym dimensions and size Nt per dimension"
-symgrp_size(Nt,Nsym) = binomial(Nt-1+Nsym, Nsym)
+symgrp_size(Nt,Nsym) = binomial_simple(Nt-1+Nsym, Nsym)
+symgrp_size(Nt,::Val{Nsym}) where Nsym = binomial_unrolled(Nt+(Nsym-1),Val(Nsym))
 
 # calculates the length of a SymArray
 symarrlength(Nts,Nsyms) = prod(symgrp_size.(Nts,Nsyms))
@@ -34,7 +35,7 @@ struct SymArray{Nsyms,T,N,M,datType<:AbstractArray} <: AbstractArray{T,N}
         data = Array{T,M}(undef,symgrp_size.(Nts,Nsyms)...)
         new{Nsyms,T,N,M,typeof(data)}(data,size,Nts)
     end
-    # this creates a SymArray that serves as a view on an existing vector
+    # this creates a SymArray that serves as a view on an existing array
     function SymArray{Nsyms}(data::datType,size::Vararg{Int,N}) where {Nsyms,N,datType<:AbstractArray{T}} where T
         Nts = _getNts(Val(Nsyms),size)
         @assert Base.size(data) == symgrp_size.(Nts,Nsyms)
@@ -65,63 +66,21 @@ SymArray{(1,)}(A::AbstractVector{T}) where {T} = (S = SymArray{(1,),T}(size(A)..
 "`SymArr_ifsym(A,Nsyms)` make a SymArray if there is some symmetry (i.e., any of the Nsyms are not 1)"
 SymArr_ifsym(A,Nsyms) = all(Nsyms.==1) ? A : SymArray{(Nsyms...,)}(A)
 
-"""based on Base.binomial, but without negative values for n and without overflow checks
-(index calculations here should not overflow if the array does not have more elements than an Int64 can represent)"""
-function binomial_simple(n::T, k::T) where T<:Integer
-    (k < 0 || k > n) && return zero(T)
-    (k == 0 || k == n) && return one(T)
-    if k > (n>>1)
-        k = n - k
-    end
-    k == 1 && return n
-    x::T = nn = n - k + 1
-    nn += 1
-    rr = 2
-    while rr <= k
-        x = div(x*nn, rr)
-        rr += 1
-        nn += 1
-    end
-    x
-end
+"calculates the contribution of index idim in (i1,...,idim,...,iN) to the corresponding linear index for the group"
+symind2ind(i,::Val{dim}) where dim = binomial_unrolled(i+(dim-2),Val(dim))
 
-"""calculate binomial(ii+n+offset,n), equal to prod((ii+j+offset)/j, j=1:n)
-This shows up in size and index calculations for arrays with symmetric indices."""
-macro symind_binomial(ii,n::Integer,offset::Integer)
-    binom = :( $(esc(ii)) + $(offset+1) ) # j=1
-    # careful about operation order:
-    # first multiply, the product is then always divisible by j
-    for j=2:n
-        binom = :( ($binom*($(esc(ii))+$(offset+j))) ÷ $j )
-    end
-    # (N n) = (N N-n) -> (ii+offset+n n) = (ii+offset+n ii+offset)
-    # when we do this replacement, we cannot unroll the loop explicitly,
-    # but it still turns out to be faster for large n and small (ii+offset)
-    binom_func = :( binomial_simple($(esc(ii))+$(n+offset),$(esc(ii))+$offset) )
-    # for small n, just return the unrolled calculation directly
-    if n < 10
-        binom
-    else
-        # in principle, ii+offset < n, but heuristically use n/2 to ensure that it wins against explicit unrolling
-        :( $(esc(ii)) < $(n÷2 - offset) ? $binom_func : $binom )
-    end
-end
-
+"calculates the linear index corresponding to the symmetric index group (i1,...,iNsym)"
 @inline @generated function symgrp_sortedsub2ind(I::Vararg{T,Nsym})::T where {Nsym,T<:Integer}
-    indexpr = :( I[1] )
-    for ndim = 2:Nsym
-        # calculate binomial(i_n+ndim-2,ndim)
-        indexpr = :( $indexpr + @symind_binomial(I[$ndim],$ndim,-2) )
-    end
-    return indexpr
+    terms2toN = [ :( symind2ind(I[$dim],Val($dim)) ) for dim=2:Nsym ]
+    :( +(I[1],$(terms2toN...)) )
 end
 
 @generated _sub2grp(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = begin
-    result = ()
+    result = []
     ii::Int = 0
-    for (iN,Nsym) in enumerate(Nsyms)
+    for Nsym in Nsyms
         Ilocs = ( :( I[$(ii+=1)] ) for _=1:Nsym)
-        result = (result..., :( symgrp_sortedsub2ind(TupleTools.sort(($(Ilocs...),))...) ) )
+        push!(result, :( symgrp_sortedsub2ind(TupleTools.sort(($(Ilocs...),))...) ) )
     end
     code = :( ($(result...),) )
     code
@@ -214,4 +173,24 @@ end
     end
     valid, I = __inc(tail(state), size)
     return valid, (1, I...)
+end
+
+function _find_symind(ind::T, ::Val{dim}, high::T) where {dim,T<:Integer}
+    dim==1 ? ind+one(T) : searchlast_func(ind, x->symind2ind(x,Val(dim)),one(T),high)
+end
+
+"""convert a linear index for a symmetric index group into a group of subindices"""
+@generated function ind2sub_symgrp(SI::SymIndexIter{N},ind::T) where {N,T<:Integer}
+    code = quote
+        ind -= 1
+    end
+    kis = Symbol.(:k,1:N)
+    for dim=N:-1:2
+        push!(code.args,:( $(kis[dim]) = _find_symind(ind,Val($dim),T(SI.size)) ))
+        push!(code.args,:( ind -= symind2ind($(kis[dim]),Val($dim)) ))
+    end
+    push!(code.args, :( k1 = ind + 1 ))
+    push!(code.args, :( return ($(kis...),)) )
+    #display(code)
+    code
 end

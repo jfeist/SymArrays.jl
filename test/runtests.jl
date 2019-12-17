@@ -7,8 +7,6 @@ using CUDAapi
 if has_cuda_gpu()
     using CuArrays
     CuArrays.allowscalar(false)
-    to_Cu(A::Array) = CuArray(A)
-    to_Cu(S::SymArray{Nsyms}) where Nsyms = SymArray{Nsyms}(CuArray(S.data),size(S)...)
 end
 
 @testset "SymArrays.jl" begin
@@ -153,19 +151,19 @@ end
         @testset "Generated" begin
             # use small dimension sizes here so the tests do not take too long
             N,M,O = 4, 5, 6
-            to_devices = has_cuda_gpu() ? (identity,to_Cu) : (identity,)
+            arrTypes = has_cuda_gpu() ? (Array,CuArray) : (Array,)
 
-            for to_device in to_devices
+            for arrType in arrTypes
                 for T in (Float64,ComplexF64)
-                    A = rand(T,N,M,O) |> to_device
+                    A = rand(T,N,M,O) |> arrType
                     for U in (Float64,ComplexF64)
-                        S = SymArray{(2,3,1),U}(M,M,N,N,N,O) |> to_device
+                        S = SymArray{(2,3,1),U}(arrType,M,M,N,N,N,O)
                         rand!(S.data)
                         # first collect GPU->CPU, then SymArray -> Array
-                        B = collect(collect(S)) |> to_device
+                        B = collect(collect(S)) |> arrType
 
                         TU = promote_type(U,T)
-                        res21 = SymArray{(1,1,1,3,1),TU}(N,O,M,N,N,N,O) |> to_device
+                        res21 = SymArray{(1,1,1,3,1),TU}(arrType,N,O,M,N,N,N,O)
                         contract!(res21,A,S,Val(2),Val(1))
                         @tensor res21_tst[i,k,l,m,n,o,p] := A[i,j,k] * B[j,l,m,n,o,p]
                         @test collect(collect(res21)) ≈ res21_tst
@@ -174,7 +172,7 @@ end
                             @test collect(collect(res21)) ≈ res21_tst
                         end
 
-                        res13 = SymArray{(1,1,2,2,1),TU}(M,O,M,M,N,N,O) |> to_device
+                        res13 = SymArray{(1,1,2,2,1),TU}(arrType,M,O,M,M,N,N,O)
                         contract!(res13,A,S,Val(1),Val(3))
                         @tensor res13_tst[j,k,l,m,n,o,p] := A[i,j,k] * B[l,m,i,n,o,p]
                         @test collect(collect(res13)) ≈ res13_tst
@@ -190,20 +188,20 @@ end
                         @test collect(collect(res13)) ≈ res13_tst
                     end
 
-                    A = rand(T,N) |> to_device
-                    S = SymArray{(2,3,1),T}(N,N,N,N,N,N) |> to_device
+                    A = rand(T,N) |> arrType
+                    S = SymArray{(2,3,1),T}(arrType,N,N,N,N,N,N)
                     rand!(S.data)
                     # first collect GPU->CPU, then SymArray -> Array
-                    B = collect(collect(S)) |> to_device
+                    B = collect(collect(S)) |> arrType
 
-                    res11 = SymArray{(1,3,1),T}(N,N,N,N,N) |> to_device
+                    res11 = SymArray{(1,3,1),T}(arrType,N,N,N,N,N)
                     contract!(res11,A,S,Val(1),Val(1))
                     @tensor res11_tst[j,k,l,m,n] := A[i] * B[i,j,k,l,m,n]
                     @test collect(collect(res11)) ≈ res11_tst
                     contract!(res11_tst,A,B,Val(1),Val(1))
                     @test collect(collect(res11)) ≈ res11_tst
 
-                    res13 = SymArray{(2,2,1),T}(N,N,N,N,N) |> to_device
+                    res13 = SymArray{(2,2,1),T}(arrType,N,N,N,N,N)
                     contract!(res13,A,S,Val(1),Val(3))
                     @tensor res13_tst[j,k,l,m,n] := A[i] * B[j,k,i,l,m,n]
                     @test collect(collect(res13)) ≈ res13_tst
@@ -216,7 +214,7 @@ end
                     contract!(res13_tst,A,B,Val(1),Val(5))
                     @test collect(collect(res13)) ≈ res13_tst
 
-                    res16 = SymArray{(2,3),T}(N,N,N,N,N) |> to_device
+                    res16 = SymArray{(2,3),T}(arrType,N,N,N,N,N)
                     contract!(res16,A,S,Val(1),Val(6))
                     @tensor res16_tst[j,k,l,m,n] := A[i] * B[j,k,l,m,n,i]
                     @test collect(collect(res16)) ≈ res16_tst
@@ -224,13 +222,13 @@ end
                     @test collect(collect(res16)) ≈ res16_tst
 
                     # check that contraction from SymArray to Array works
-                    A = rand(T,M,O) |> to_device
-                    S = SymArray{(1,2,1),T}(N,M,M,O) |> to_device
+                    A = rand(T,M,O) |> arrType
+                    S = SymArray{(1,2,1),T}(arrType,N,M,M,O)
                     rand!(S.data)
-                    B = collect(collect(S)) |> to_device
+                    B = collect(collect(S)) |> arrType
 
-                    res12 = zeros(T,O,N,M,O) |> to_device
-                    res12_tst = zeros(T,O,N,M,O) |> to_device
+                    res12 = zeros(T,O,N,M,O) |> arrType
+                    res12_tst = zeros(T,O,N,M,O) |> arrType
                     contract!(res12,A,S,Val(1),Val(2))
                     contract!(res12_tst,A,B,Val(1),Val(2))
                     @test res12 ≈ res12_tst

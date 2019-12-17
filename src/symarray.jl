@@ -29,16 +29,19 @@ struct SymArray{Nsyms,T,N,M,datType<:AbstractArray} <: AbstractArray{T,N}
     data::datType
     size::NTuple{N,Int}
     Nts::NTuple{M,Int}
-    function SymArray{Nsyms,T}(size::Vararg{Int,N}) where {Nsyms,T,N}
+    function SymArray{Nsyms,T}(::Type{arrType},size::Vararg{Int,N}) where {Nsyms,T,N,arrType}
         Nts = _getNts(Val(Nsyms),size)
         M = length(Nsyms)
-        data = Array{T,M}(undef,symgrp_size.(Nts,Nsyms)...)
+        data = arrType{T,M}(undef,symgrp_size.(Nts,Nsyms)...)
         new{Nsyms,T,N,M,typeof(data)}(data,size,Nts)
+    end
+    function SymArray{Nsyms,T}(size::Vararg{Int,N}) where {Nsyms,T,N}
+        SymArray{Nsyms,T}(Array,size...)
     end
     # this creates a SymArray that serves as a view on an existing array
     function SymArray{Nsyms}(data::datType,size::Vararg{Int,N}) where {Nsyms,N,datType<:AbstractArray{T}} where T
         Nts = _getNts(Val(Nsyms),size)
-        @assert Base.size(data) == symgrp_size.(Nts,Nsyms)
+        @assert Base.size(data) == symgrp_size.(Nts,Val.(Nsyms))
         new{Nsyms,T,N,length(Nsyms),datType}(data,size,Nts)
     end
 end

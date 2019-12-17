@@ -172,6 +172,54 @@ function contract!(res::StridedArray{TU},A::StridedVector{TU},B::StridedArray{TU
     res
 end
 
+# Array[i_n]*Array[i1,i2,i3,...,iN]
+function contract!(res::StridedArray{TU,Nres},A::StridedArray{TU,NA},B::StridedArray{TU,NB},::Val{nA},::Val{nB}) where {TU,Nres,NA,NB,nA,nB}
+    # use specialized code for 1D-arrays if possible
+    if NA==1
+        @assert nA==1
+        return contract!(res,A,B,Val(nB))
+    elseif NB==1
+        @assert nB==1
+        return contract!(res,B,A,Val(nA))
+    end
+
+    nsum = size(A,nA)
+    @assert size(B,nB) == nsum
+    @assert Nres == NA + NB - 2
+    ii = 0
+    for jj = 1:NA
+        jj==nA && continue
+        ii += 1
+        @assert size(A,jj) == size(res,ii)
+    end
+    for jj = 1:NB
+        jj==nB && continue
+        ii += 1
+        @assert size(B,jj) == size(res,ii)
+    end
+
+    if nA==NA && nB==1      # A[...,i]*B[i,...]
+        resAsize = prod(ntuple(i->size(A,i),Val(NA-1)))
+        mul!(reshape(res,resAsize,:),reshape(A,resAsize,nsum),reshape(B,nsum,:))
+    else
+        packedsize(M,::Val{n}) where n = begin
+            nM1 = prod(ntuple(i->size(M,i),Val(n-1)))
+            nM2 = size(M,n)
+            nM3 = prod(ntuple(i->size(M,n+i),Val(ndims(M)-n)))
+            (nM1, nM2, nM3)
+        end
+        # just use @tensor after reshaping to pack together
+        NAps = packedsize(A,Val(nA))
+        NBps = packedsize(B,Val(nB))
+        Nresps = (NAps[1],NAps[3],NBps[1],NBps[3])
+        Ap = reshape(A,NAps...)
+        Bp = reshape(B,NBps...)
+        resp = reshape(res,Nresps...)
+        @tensor resp[iA1,iA3,iB1,iB3] = Ap[iA1,ii,iA3] * Bp[iB1,ii,iB3]
+    end
+    res
+end
+
 """return the symmetry group index and the number of symmetric indices in the group"""
 @inline which_symgrp(S::T,nS) where T<:SymArray = which_symgrp(T,nS)
 @inline @generated function which_symgrp(::Type{<:SymArray{Nsyms}},nS) where Nsyms

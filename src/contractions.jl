@@ -314,6 +314,13 @@ res[iAprev,iApost,iSprev,Icntrct-1,ISpost]
     code
 end
 
+function contract!(res::StridedArray{TU,Nres}, A::StridedArray{T,NA}, S::SymArray{NsymsS,U}, ::Val{nA}, ::Val{nS}) where {T,U,TU,NsymsS,Nres,NA,nA,nS}
+    # StridedArray is equivalent to SymArray with all Nsyms equal to 1, provide this as overlay of that data
+    ressym = SymArray{ntuple(i->1,Val(Nres))}(res,size(res)...)
+    contract!(ressym,A,S,Val(nA),Val(nS))
+    res
+end
+
 @generated function contract!(res::SymArray{Nsymsres,TU}, A::StridedArray{T,NA}, S::SymArray{NsymsS,U}, ::Val{nA}, ::Val{nS}) where {T,U,TU,NsymsS,Nsymsres,NA,nA,nS}
     contracted_group, Nsym_ctrgrp = which_symgrp(S,nS)
     sizeA13unit = (nA==1,nA==NA)

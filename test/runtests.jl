@@ -222,6 +222,18 @@ end
                     @test collect(collect(res16)) ≈ res16_tst
                     contract!(res16_tst,A,B,Val(1),Val(6))
                     @test collect(collect(res16)) ≈ res16_tst
+
+                    # check that contraction from SymArray to Array works
+                    A = rand(T,M,O) |> to_device
+                    S = SymArray{(1,2,1),T}(N,M,M,O) |> to_device
+                    rand!(S.data)
+                    B = collect(collect(S)) |> to_device
+
+                    res12 = zeros(T,O,N,M,O) |> to_device
+                    res12_tst = zeros(T,O,N,M,O) |> to_device
+                    contract!(res12,A,S,Val(1),Val(2))
+                    contract!(res12_tst,A,B,Val(1),Val(2))
+                    @test res12 ≈ res12_tst
                 end
             end
         end

@@ -14,6 +14,7 @@ TupleTools = "9d95972d-f1c8-5527-a6e0-b4b365fa01f6"
 
 [compat]
 CUDAapi = "2.0"
+CUDAnative = "2.6"
 CuArrays = "1.4"
 TensorOperations = "1,2"
 TupleTools = "1.1"

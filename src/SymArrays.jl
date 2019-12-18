@@ -1,6 +1,6 @@
 module SymArrays
 
-export SymArray, contract, contract!, SymArr_ifsym
+export SymArray, contract, contract!, SymArr_ifsym, symgrp_size, symgrps, nsymgrps, storage_type
 
 include("helpers.jl")
 

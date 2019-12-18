@@ -165,6 +165,8 @@ end
                     A = rand(T,N,M,O) |> arrType
                     for U in (Float64,ComplexF64)
                         S = SymArray{(2,3,1),U}(arrType,M,M,N,N,N,O)
+                        @test storage_type(S) <: arrType
+                        
                         rand!(S.data)
                         # first collect GPU->CPU, then SymArray -> Array
                         B = collect(collect(S)) |> arrType

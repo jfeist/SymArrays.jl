@@ -22,6 +22,11 @@ end
         # indexing the array allows having additional 1s at the end
         @test S[3,5,1] == S[3,5]
         @test_throws BoundsError S[3,5,3]
+        # this calculation gives an index for data that is within bounds, but should not be legal
+        # make sure this is caught
+        @test_throws BoundsError S[0,6]
+        @test (S[1,5] = 2.; S[1,5] == 2.)
+        @test_throws BoundsError S[0,6] = 2.
 
         S = SymArray{(3,1,2,2),Float64}(3,3,3,2,4,4,4,4)
         @test size(S) == (3,3,3,2,4,4,4,4)
@@ -76,6 +81,8 @@ end
         x = rand(3)
         S = SymArray{(2,)}(x,2,2)
         @test S.data === x
+        fill!(S,8.)
+        @test all(S .== 8.)
 
         x = 5:10
         S = SymArray{(2,)}(x,3,3)
@@ -231,7 +238,7 @@ end
                     res12_tst = zeros(T,O,N,M,O) |> arrType
                     contract!(res12,A,S,Val(1),Val(2))
                     contract!(res12_tst,A,B,Val(1),Val(2))
-                    @test res12 ≈ res12_tst
+                    @test collect(res12) ≈ collect(res12_tst)
                 end
             end
         end

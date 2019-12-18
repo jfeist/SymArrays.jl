@@ -1,5 +1,5 @@
 import Base: size, length, ndims, eltype, first, last
-import Base: getindex, setindex!, iterate, eachindex, IndexStyle, CartesianIndices, tail, copyto!
+import Base: getindex, setindex!, iterate, eachindex, IndexStyle, CartesianIndices, tail, copyto!, fill!
 using TupleTools
 
 "size of a single symmetric group with Nsym dimensions and size Nt per dimension"
@@ -61,6 +61,7 @@ copyto!(S::SymArray,A::AbstractArray) = begin
     end
     S
 end
+fill!(S::SymArray,v) = fill!(S.data,v)
 
 SymArray{Nsyms}(A::AbstractArray{T}) where {Nsyms,T} = (S = SymArray{Nsyms,T}(size(A)...); copyto!(S,A))
 # to avoid ambiguity with Vararg "view" constructor above
@@ -91,9 +92,9 @@ end
 
 IndexStyle(::Type{<:SymArray}) = IndexCartesian()
 getindex(A::SymArray, i::Int) = A.data[i]
-getindex(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = A.data[_sub2grp(A,I...)...]
+getindex(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = (@boundscheck checkbounds(A,I...); @inbounds A.data[_sub2grp(A,I...)...])
 setindex!(A::SymArray, v, i::Int) = A.data[i] = v
-setindex!(A::SymArray{Nsyms,T,N}, v, I::Vararg{Int,N}) where {Nsyms,T,N} = (A.data[_sub2grp(A,I...)...] = v);
+setindex!(A::SymArray{Nsyms,T,N}, v, I::Vararg{Int,N}) where {Nsyms,T,N} = (@boundscheck checkbounds(A,I...); @inbounds A.data[_sub2grp(A,I...)...] = v);
 
 eachindex(S::SymArray) = CartesianIndices(S)
 CartesianIndices(S::SymArray) = SymArrayIter(S)

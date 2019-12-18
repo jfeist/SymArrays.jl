@@ -207,8 +207,8 @@ end
 @generated function _grp2sub(A::SymArray{Nsyms,T,N,M}, I::Vararg{Int,M}) where {Nsyms,T,N,M}
     exs = [:( ind2sub_symgrp(SymIndexIter($Nsym,A.Nts[$ii]),I[$ii]) ) for (ii,Nsym) in enumerate(Nsyms)]
     code = :( TupleTools.flatten($(exs...)) )
-    display(code)
+    #display(code)
     code
 end
 
-ind2sub(A::SymArray,ii) = _grp2sub(A,CartesianIndices(A.data)[ii])
+ind2sub(A::SymArray,ii) = _grp2sub(A,Tuple(CartesianIndices(A.data)[ii])...)

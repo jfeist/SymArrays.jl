@@ -9,7 +9,7 @@ include("symarray.jl")
 include("contractions.jl")
 
 using CUDAapi
-if has_cuda_gpu()
+if has_cuda()
     include("cuda_contractions.jl")
 end
 

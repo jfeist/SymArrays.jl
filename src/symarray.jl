@@ -1,6 +1,7 @@
 import Base: size, length, ndims, eltype, first, last
 import Base: getindex, setindex!, iterate, eachindex, IndexStyle, CartesianIndices, tail, copyto!, fill!
 using TupleTools
+using Adapt
 
 "size of a single symmetric group with Nsym dimensions and size Nt per dimension"
 symgrp_size(Nt,Nsym) = binomial_simple(Nt-1+Nsym, Nsym)
@@ -48,6 +49,10 @@ end
 
 size(A::SymArray) = A.size
 length(A::SymArray) = length(A.data)
+
+# this is necessary for CUDAnative kernels, but also generally useful
+# e.g., adapt(CuArray,S) will return a copy of the SymArray with storage in a CuArray
+Adapt.adapt_structure(to, x::SymArray{Nsyms}) where Nsyms = SymArray{Nsyms}(adapt(to,x.data),x.size...)
 
 symgrp_size(S::SymArray{Nsyms}) where Nsyms = symgrp_size.(S.Nts,Nsyms)
 symgrp_size(S::SymArray{Nsyms},d::Integer) where Nsyms = symgrp_size(S.Nts[d],Nsyms[d])

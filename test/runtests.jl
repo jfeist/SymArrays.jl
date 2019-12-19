@@ -88,6 +88,10 @@ end
         fill!(S,8.)
         @test all(S .== 8.)
 
+        S2 = SymArray{(2,)}(0*x,2,2)
+        copyto!(S2,S)
+        @test S == S2
+
         x = 5:10
         S = SymArray{(2,)}(x,3,3)
         @test S.data === x

@@ -1,4 +1,4 @@
-import Base: size, length, ndims, eltype, first, last
+import Base: size, length, ndims, eltype, first, last, ==
 import Base: getindex, setindex!, iterate, eachindex, IndexStyle, CartesianIndices, tail, copyto!, fill!
 using TupleTools
 using Adapt
@@ -81,6 +81,8 @@ copyto!(S::SymArray,Ssrc::SymArray) = begin
 end
 
 fill!(S::SymArray,v) = fill!(S.data,v)
+
+==(S1::SymArray,S2::SymArray) = (symgrps(S1),S1.data) == (symgrps(S2),S2.data)
 
 SymArray{Nsyms}(A::AbstractArray{T}) where {Nsyms,T} = (S = SymArray{Nsyms,T}(size(A)...); copyto!(S,A))
 # to avoid ambiguity with Vararg "view" constructor above

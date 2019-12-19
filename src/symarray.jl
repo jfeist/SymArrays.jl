@@ -73,6 +73,13 @@ copyto!(S::SymArray,A::AbstractArray) = begin
     end
     S
 end
+copyto!(S::SymArray,Ssrc::SymArray) = begin
+    @assert symgrps(S) == symgrps(Ssrc)
+    @assert size(S) == size(Ssrc)
+    copyto!(S.data,Ssrc.data)
+    S
+end
+
 fill!(S::SymArray,v) = fill!(S.data,v)
 
 SymArray{Nsyms}(A::AbstractArray{T}) where {Nsyms,T} = (S = SymArray{Nsyms,T}(size(A)...); copyto!(S,A))

@@ -56,9 +56,15 @@ Adapt.adapt_structure(to, x::SymArray{Nsyms}) where Nsyms = SymArray{Nsyms}(adap
 
 symgrp_size(S::SymArray{Nsyms}) where Nsyms = symgrp_size.(S.Nts,Nsyms)
 symgrp_size(S::SymArray{Nsyms},d::Integer) where Nsyms = symgrp_size(S.Nts[d],Nsyms[d])
-symgrps(S::SymArray{Nsyms}) where Nsyms = Nsyms
-nsymgrps(S::SymArray{Nsyms,T,N,M}) where {Nsyms,T,N,M} = M
-storage_type(::SymArray{Nsym,T,N,M,datType}) where {Nsym,T,N,M,datType} = datType
+symgrps(S) = symgrps(typeof(S))
+symgrps(::Type{<:SymArray{Nsyms}}) where Nsyms = Nsyms
+nsymgrps(S) = nsymgrps(typeof(S))
+nsymgrps(::Type{<:SymArray{Nsyms,T,N,M}}) where {Nsyms,T,N,M} = M
+
+"""storage_type(A): return the underlying storage type of array wrapper types"""
+storage_type(A) = storage_type(typeof(A))
+storage_type(::Type{T}) where T = T
+storage_type(::Type{<:SymArray{Nsyms,T,N,M,datType}}) where {Nsyms,T,N,M,datType} = datType
 
 copyto!(S::SymArray,A::AbstractArray) = begin
     @assert size(S) == size(A)

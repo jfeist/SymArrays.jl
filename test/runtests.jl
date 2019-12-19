@@ -15,6 +15,8 @@ end
         @test symarrlength((3,6,4,3),(3,2,1,3)) == 8400
 
         S = SymArray{(2,),Float64}(5,5)
+        @test nsymgrps(S) == 1
+        @test symgrps(S) == (2,)
         @test _sub2grp(S,2,5) == _sub2grp(S,5,2)
         @test _sub2grp(S,3,4) != _sub2grp(S,5,3)
         # _sub2grp has to have same number of arguments as size of N
@@ -29,6 +31,8 @@ end
         @test_throws BoundsError S[0,6] = 2.
 
         S = SymArray{(3,1,2,2),Float64}(3,3,3,2,4,4,4,4)
+        @test nsymgrps(S) == 4
+        @test symgrps(S) == (3,1,2,2)
         @test size(S) == (3,3,3,2,4,4,4,4)
         @test length(S) == 2000
         # iterating over all indices should give only the distinct indices,
@@ -170,6 +174,7 @@ end
                         rand!(S.data)
                         # first collect GPU->CPU, then SymArray -> Array
                         B = collect(collect(S)) |> arrType
+                        @test storage_type(B) <: arrType
 
                         TU = promote_type(U,T)
                         res21 = SymArray{(1,1,1,3,1),TU}(arrType,N,O,M,N,N,N,O)

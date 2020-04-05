@@ -1,6 +1,30 @@
 using CuArrays
-using CuArrays: cudims, @cuindex
 using CUDAnative
+
+###########################################################################
+## helper functions (originally from CuArrays, but since removed there)  ##
+###########################################################################
+function cudims(n::Integer)
+  threads = min(n, 256)
+  ceil(Int, n / threads), threads
+end
+
+cudims(a::AbstractArray) = cudims(length(a))
+
+# COV_EXCL_START
+@inline ind2sub_(a::AbstractArray{T,0}, i) where T = ()
+@inline ind2sub_(a, i) = Tuple(CartesianIndices(a)[i])
+
+macro cuindex(A)
+  quote
+    A = $(esc(A))
+    i = (blockIdx().x-1) * blockDim().x + threadIdx().x
+    i > length(A) && return
+    ind2sub_(A, i)
+  end
+end
+# COV_EXCL_STOP
+###########################################################################
 
 mygemv!(tA,alpha,A::CuArray,args...) = CuArrays.CUBLAS.gemv!(tA,alpha,A,args...)
 _contract_middle!(res::CuArray,A,B) = (@tensor res[i,k] = B[i,j,k] * A[j])

@@ -18,7 +18,7 @@ Adapt = "1.0"
 CUDAapi = "2.0, 4.0"
 CUDAnative = "2.6, 3"
 CuArrays = "1.4, 2"
-TensorOperations = "1,2"
+TensorOperations = "1,2, 3.0"
 TupleTools = "1.1"
 julia = "1"
 

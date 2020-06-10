@@ -14,7 +14,7 @@ TensorOperations = "6aa20fa7-93e2-5fca-9bc0-fbd0db3c71a2"
 TupleTools = "9d95972d-f1c8-5527-a6e0-b4b365fa01f6"
 
 [compat]
-Adapt = "1.0"
+Adapt = "1.0, 2.0"
 CUDAapi = "2.0, 4.0"
 CUDAnative = "2.6, 3"
 CuArrays = "1.4, 2"

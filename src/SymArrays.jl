@@ -8,7 +8,7 @@ include("symarray.jl")
 
 include("contractions.jl")
 
-using CUDAapi
+using CUDA
 if has_cuda()
     include("cuda_contractions.jl")
 end

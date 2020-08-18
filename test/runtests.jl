@@ -3,10 +3,9 @@ using SymArrays
 using SymArrays: symarrlength, _sub2grp, which_symgrp
 using TensorOperations
 using Random
-using CUDAapi
+using CUDA
 if has_cuda_gpu()
-    using CuArrays
-    CuArrays.allowscalar(false)
+    CUDA.allowscalar(false)
 end
 
 @testset "SymArrays.jl" begin
@@ -184,26 +183,26 @@ end
                         res21 = SymArray{(1,1,1,3,1),TU}(arrType,N,O,M,N,N,N,O)
                         contract!(res21,A,S,Val(2),Val(1))
                         @tensor res21_tst[i,k,l,m,n,o,p] := A[i,j,k] * B[j,l,m,n,o,p]
-                        @test collect(collect(res21)) ≈ res21_tst
+                        @test collect(collect(res21)) ≈ collect(res21_tst)
                         if T==U
                             contract!(res21_tst,A,B,Val(2),Val(1))
-                            @test collect(collect(res21)) ≈ res21_tst
+                            @test collect(collect(res21)) ≈ collect(res21_tst)
                         end
 
                         res13 = SymArray{(1,1,2,2,1),TU}(arrType,M,O,M,M,N,N,O)
                         contract!(res13,A,S,Val(1),Val(3))
                         @tensor res13_tst[j,k,l,m,n,o,p] := A[i,j,k] * B[l,m,i,n,o,p]
-                        @test collect(collect(res13)) ≈ res13_tst
+                        @test collect(collect(res13)) ≈ collect(res13_tst)
                         if T==U
                             contract!(res13_tst,A,B,Val(1),Val(3))
-                            @test collect(collect(res13)) ≈ res13_tst
+                            @test collect(collect(res13)) ≈ collect(res13_tst)
                         end
 
                         # dimension 3, 4, and 5 should be equivalent
                         contract!(res13,A,S,Val(1),Val(4))
-                        @test collect(collect(res13)) ≈ res13_tst
+                        @test collect(collect(res13)) ≈ collect(res13_tst)
                         contract!(res13,A,S,Val(1),Val(5))
-                        @test collect(collect(res13)) ≈ res13_tst
+                        @test collect(collect(res13)) ≈ collect(res13_tst)
                     end
 
                     A = rand(T,N) |> arrType
@@ -215,29 +214,29 @@ end
                     res11 = SymArray{(1,3,1),T}(arrType,N,N,N,N,N)
                     contract!(res11,A,S,Val(1),Val(1))
                     @tensor res11_tst[j,k,l,m,n] := A[i] * B[i,j,k,l,m,n]
-                    @test collect(collect(res11)) ≈ res11_tst
+                    @test collect(collect(res11)) ≈ collect(res11_tst)
                     contract!(res11_tst,A,B,Val(1),Val(1))
-                    @test collect(collect(res11)) ≈ res11_tst
+                    @test collect(collect(res11)) ≈ collect(res11_tst)
 
                     res13 = SymArray{(2,2,1),T}(arrType,N,N,N,N,N)
                     contract!(res13,A,S,Val(1),Val(3))
                     @tensor res13_tst[j,k,l,m,n] := A[i] * B[j,k,i,l,m,n]
-                    @test collect(collect(res13)) ≈ res13_tst
+                    @test collect(collect(res13)) ≈ collect(res13_tst)
                     contract!(res13_tst,A,B,Val(1),Val(3))
-                    @test collect(collect(res13)) ≈ res13_tst
+                    @test collect(collect(res13)) ≈ collect(res13_tst)
 
                     # dimension 3, 4, and 5 should be equivalent
                     contract!(res13_tst,A,B,Val(1),Val(4))
-                    @test collect(collect(res13)) ≈ res13_tst
+                    @test collect(collect(res13)) ≈ collect(res13_tst)
                     contract!(res13_tst,A,B,Val(1),Val(5))
-                    @test collect(collect(res13)) ≈ res13_tst
+                    @test collect(collect(res13)) ≈ collect(res13_tst)
 
                     res16 = SymArray{(2,3),T}(arrType,N,N,N,N,N)
                     contract!(res16,A,S,Val(1),Val(6))
                     @tensor res16_tst[j,k,l,m,n] := A[i] * B[j,k,l,m,n,i]
-                    @test collect(collect(res16)) ≈ res16_tst
+                    @test collect(collect(res16)) ≈ collect(res16_tst)
                     contract!(res16_tst,A,B,Val(1),Val(6))
-                    @test collect(collect(res16)) ≈ res16_tst
+                    @test collect(collect(res16)) ≈ collect(res16_tst)
 
                     # check that contraction from SymArray to Array works
                     A = rand(T,M,O) |> arrType

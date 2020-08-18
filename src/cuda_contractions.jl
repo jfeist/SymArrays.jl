@@ -1,5 +1,4 @@
-using CuArrays
-using CUDAnative
+using CUDA
 
 ###########################################################################
 ## helper functions (originally from CuArrays, but since removed there)  ##
@@ -26,7 +25,7 @@ end
 # COV_EXCL_STOP
 ###########################################################################
 
-mygemv!(tA,alpha,A::CuArray,args...) = CuArrays.CUBLAS.gemv!(tA,alpha,A,args...)
+mygemv!(tA,alpha,A::CuArray,args...) = CUDA.CUBLAS.gemv!(tA,alpha,A,args...)
 _contract_middle!(res::CuArray,A,B) = (@tensor res[i,k] = B[i,j,k] * A[j])
 
 import Base: collect

@@ -67,11 +67,20 @@ storage_type(::Type{T}) where T = T
 storage_type(::Type{<:SymArray{Nsyms,T,N,M,datType}}) where {Nsyms,T,N,M,datType} = datType
 
 copyto!(S::SymArray,A::AbstractArray) = begin
-    @assert size(S) == size(A)
-    @inbounds for (i,I) in enumerate(eachindex(S))
+    Ainds, Sinds = LinearIndices(A), LinearIndices(S)
+    isempty(Ainds) || (checkbounds(Bool, Sinds, first(Ainds)) && checkbounds(Bool, Sinds, last(Ainds))) || throw(BoundsError(S, Ainds))
+    @inbounds for (i,I) in zip(Ainds,eachindex(S))
         S[i] = A[I]
     end
     S
+end
+copyto!(A::AbstractArray,S::SymArray) = begin
+    Ainds, Sinds = LinearIndices(A), LinearIndices(S)
+    isempty(Sinds) || (checkbounds(Bool, Ainds, first(Sinds)) && checkbounds(Bool, Ainds, last(Sinds))) || throw(BoundsError(A, Sinds))
+    @inbounds for (i,I) in zip(Ainds,CartesianIndices(A))
+        A[i] = S[I]
+    end
+    A
 end
 copyto!(S::SymArray,Ssrc::SymArray) = begin
     @assert symgrps(S) == symgrps(Ssrc)

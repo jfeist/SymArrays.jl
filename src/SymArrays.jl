@@ -8,9 +8,6 @@ include("symarray.jl")
 
 include("contractions.jl")
 
-using CUDA
-if has_cuda()
-    include("cuda_contractions.jl")
-end
+include("cuda_contractions.jl")
 
 end # module

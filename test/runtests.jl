@@ -4,13 +4,10 @@ using SymArrays: symarrlength, _sub2grp, which_symgrp
 using TensorOperations
 using Random
 using CUDA
-if has_cuda_gpu()
-    CUDA.allowscalar(false)
-end
+CUDA.allowscalar(false)
 
 @testset "SymArrays.jl" begin
     @testset "SymArray" begin
-        # Write your own tests here.
         @test symarrlength((3,6,4,3),(3,2,1,3)) == 8400
 
         S = SymArray{(2,),Float64}(5,5)

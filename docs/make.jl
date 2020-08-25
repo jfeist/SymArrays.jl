@@ -9,9 +9,8 @@ makedocs(;
     repo="https://github.com/jfeist/SymArrays.jl/blob/{commit}{path}#L{line}",
     sitename="SymArrays.jl",
     authors="Johannes Feist",
-    assets=String[],
 )
 
 deploydocs(;
-    repo="github.com/jfeist/SymArrays.jl",
+    repo="github.com/jfeist/SymArrays.jl.git",
 )

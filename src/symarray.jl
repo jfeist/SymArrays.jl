@@ -1,5 +1,6 @@
-import Base: size, length, ndims, eltype, first, last, ==
+import Base: size, length, ndims, eltype, first, last, ==, parent
 import Base: getindex, setindex!, iterate, eachindex, IndexStyle, CartesianIndices, tail, copyto!, fill!
+using LinearAlgebra
 using TupleTools
 using Adapt
 
@@ -47,6 +48,7 @@ struct SymArray{Nsyms,T,N,M,datType<:AbstractArray} <: AbstractArray{T,N}
     end
 end
 
+parent(A::SymArray) = A.data
 size(A::SymArray) = A.size
 length(A::SymArray) = length(A.data)
 
@@ -61,10 +63,20 @@ symgrps(::Type{<:SymArray{Nsyms}}) where Nsyms = Nsyms
 nsymgrps(S) = nsymgrps(typeof(S))
 nsymgrps(::Type{<:SymArray{Nsyms,T,N,M}}) where {Nsyms,T,N,M} = M
 
-"""storage_type(A): return the underlying storage type of array wrapper types"""
+"""
+    storage_type(A)
+
+Return the type of the underlying storage array for array wrappers.
+"""
 storage_type(A) = storage_type(typeof(A))
-storage_type(::Type{T}) where T = T
-storage_type(::Type{<:SymArray{Nsyms,T,N,M,datType}}) where {Nsyms,T,N,M,datType} = datType
+storage_type(T::Type) = (P = parent_type(T); P===T ? T : storage_type(P))
+
+parent_type(T::Type{<:AbstractArray}) = T
+parent_type(::Type{<:PermutedDimsArray{T,N,perm,iperm,AA}}) where {T,N,perm,iperm,AA} = AA
+parent_type(::Type{<:LinearAlgebra.Transpose{T,S}}) where {T,S} = S
+parent_type(::Type{<:LinearAlgebra.Adjoint{T,S}}) where {T,S} = S
+parent_type(::Type{<:SubArray{T,N,P}}) where {T,N,P} = P
+parent_type(::Type{<:SymArray{Nsyms,T,N,M,datType}}) where {Nsyms,T,N,M,datType} = datType
 
 copyto!(S::SymArray,A::AbstractArray) = begin
     Ainds, Sinds = LinearIndices(A), LinearIndices(S)

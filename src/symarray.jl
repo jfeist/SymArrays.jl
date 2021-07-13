@@ -248,4 +248,5 @@ end
     code
 end
 
-ind2sub(A::SymArray,ii) = _grp2sub(A,Tuple(CartesianIndices(A.data)[ii])...)
+@inline ind2sub(A, ii) = Tuple(CartesianIndices(A)[ii])
+@inline ind2sub(A::SymArray,ii) = _grp2sub(A,ind2sub(A.data,ii)...)

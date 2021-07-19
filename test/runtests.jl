@@ -1,13 +1,33 @@
 using Test
 using SymArrays
-using SymArrays: symarrlength, _sub2grp, which_symgrp
+using SymArrays: symarrlength, _sub2grp, which_symgrp, SymIndexIter, ind2sub_symgrp
 using TensorOperations
 using Random
 using CUDA
 using cuTENSOR
 CUDA.allowscalar(false)
 
+function test_ind2sub(SI::SymIndexIter)
+    correct = true
+    for (ii, I) in enumerate(SI)
+        correct &= I == ind2sub_symgrp(SI,ii)
+    end
+    correct
+end
+
 @testset "SymArrays.jl" begin
+    @testset "SymIndexIter" begin
+        for d in 1:4
+            for n in (10,15,30,57)
+                for Nsym = (-d,d)
+                    SI = SymIndexIter(Nsym,n)
+                    @test count(i->true,SI) == length(SI)
+                    @test test_ind2sub(SI)
+                end
+            end
+        end
+    end
+
     @testset "SymArray" begin
         @test symarrlength((3,6,4,3),(3,2,1,3)) == 8400
 
@@ -38,7 +58,7 @@ CUDA.allowscalar(false)
         @test sum(1 for I in eachindex(S)) == length(S)
 
         # calculating the linear index when iterating over Cartesian indices should give sequential access to the array
-        @test 1:length(S) == [(LinearIndices(S.data)[_sub2grp(S,Tuple(I)...)...] for I in eachindex(S))...]
+        @test 1:length(S) == [(LinearIndices(S.data)[_sub2grp(S,Tuple(I)...)[2]...] for I in eachindex(S))...]
 
         @testset "_sub2grp" begin
             # test that permuting exchangeable indices accesses the same array element
@@ -60,9 +80,9 @@ CUDA.allowscalar(false)
             for Ndim = 1:maxNdim
                 S = SymArray{(Ndim,),Float64}(ntuple(i->NN,Ndim)...)
                 Is = ntuple(i->NN,Ndim)
-                @test _sub2grp(S,Is...) == size(S.data)
+                @test _sub2grp(S,Is...) == (1, size(S.data))
                 Is = ntuple(i->1,Ndim)
-                @test _sub2grp(S,Is...) == (1,)
+                @test _sub2grp(S,Is...) == (1, (1,))
             end
         end
 

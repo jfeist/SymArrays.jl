@@ -4,16 +4,16 @@ using LinearAlgebra
 using TupleTools
 using Adapt
 
-"size of a single symmetric group with Nsym dimensions and size Nt per dimension"
-symgrp_size(Nt,Nsym) = binomial_simple(Nt-1+Nsym, Nsym)
-symgrp_size(Nt,::Val{Nsym}) where Nsym = binomial_unrolled(Nt+(Nsym-1),Val(Nsym))
+"size of a single symmetric group with Nsym dimensions and size Nt per dimension. Nsym<0 means antisymmetric"
+symgrp_size(Nt,Nsym) = Nsym > 0 ? binomial_simple(Nt-1+Nsym, Nsym) : binomial_simple(Nt, Nsym)
+symgrp_size(Nt,::Val{Nsym}) where Nsym = Nsym > 0 ? binomial_unrolled(Nt+(Nsym-1),Val(Nsym)) : binomial_unrolled(Nt,Val(Nsym))
 
 # calculates the length of a SymArray
 symarrlength(Nts,Nsyms) = prod(symgrp_size.(Nts,Nsyms))
 
 @generated function _getNts(::Val{Nsyms},size::NTuple{N,Int}) where {Nsyms,N}
-    @assert sum(Nsyms)==N
-    symdims = cumsum(collect((1,Nsyms...)))
+    @assert sum(abs.(Nsyms))==N
+    symdims = cumsum(collect((1,abs.(Nsyms)...)))
     Nts = [ :( size[$ii] ) for ii in symdims[1:end-1]]
     code = quote
         Nts = ($(Nts...),)
@@ -117,6 +117,7 @@ SymArr_ifsym(A,Nsyms) = all(Nsyms.==1) ? A : SymArray{(Nsyms...,)}(A)
 
 "calculates the contribution of index idim in (i1,...,idim,...,iN) to the corresponding linear index for the group"
 symind2ind(i,::Val{dim}) where dim = binomial_unrolled(i+(dim-2),Val(dim))
+asymind2ind(i,::Val{dim}) where dim = binomial_unrolled(i-1,Val(dim))
 
 "calculates the linear index corresponding to the symmetric index group (i1,...,iNsym)"
 @inline @generated function symgrp_sortedsub2ind(I::Vararg{T,Nsym})::T where {Nsym,T<:Integer}
@@ -124,22 +125,52 @@ symind2ind(i,::Val{dim}) where dim = binomial_unrolled(i+(dim-2),Val(dim))
     :( +(I[1],$(terms2toN...)) )
 end
 
-@generated _sub2grp(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = begin
+"calculates the linear index corresponding to the antisymmetric index group (i1,...,iNsym)"
+@inline @generated function asymgrp_sortedsub2ind(I::Vararg{T,Nsym})::T where {Nsym,T<:Integer}
+    terms2toN = [ :( asymind2ind(I[$dim],Val($dim)) ) for dim=2:Nsym ]
+    :( +(I[1],$(terms2toN...)) )
+end
+
+function _sub2grp_code(Nsyms)
+    permsigns = []
     result = []
     ii::Int = 0
-    for Nsym in Nsyms
-        Ilocs = ( :( I[$(ii+=1)] ) for _=1:Nsym)
-        push!(result, :( symgrp_sortedsub2ind(TupleTools.sort(($(Ilocs...),))...) ) )
+    code = quote end
+    for (isym,Nsym) in enumerate(Nsyms)
+        Isrtd = Symbol(:Isrtd,isym)
+        Ilocs = [ :(I[$(ii+=1)]) for _=1:abs(Nsym) ]
+        Iloc = :( ($(Ilocs...),) )
+        #println(Iloc)
+        if Nsym > 0
+            push!(code.args, :( $Isrtd = TupleTools.sort($Iloc) ))
+            push!(permsigns, 1)
+            push!(result, :( symgrp_sortedsub2ind($Isrtd...) ))
+        else
+            psym = Symbol(:p,isym)
+            push!(code.args, :( ($psym, $Isrtd) = sort_track_parity($Iloc)) )
+            push!(permsigns, psym)
+            push!(result, :( asymgrp_sortedsub2ind($Isrtd...) ))
+        end
     end
-    code = :( ($(result...),) )
+    push!(code.args, :( *($(permsigns...)), ($(result...),) ))
     code
 end
 
+@generated _sub2grp(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = _sub2grp_code(Nsyms)
+
 IndexStyle(::Type{<:SymArray}) = IndexCartesian()
 getindex(A::SymArray, i::Int) = A.data[i]
-getindex(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = (@boundscheck checkbounds(A,I...); @inbounds A.data[_sub2grp(A,I...)...])
+getindex(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = begin
+    @boundscheck checkbounds(A,I...)
+    permsign, grpinds = _sub2grp(A,I...)
+    @inbounds permsign * A.data[grpinds...]
+end
 setindex!(A::SymArray, v, i::Int) = A.data[i] = v
-setindex!(A::SymArray{Nsyms,T,N}, v, I::Vararg{Int,N}) where {Nsyms,T,N} = (@boundscheck checkbounds(A,I...); @inbounds A.data[_sub2grp(A,I...)...] = v);
+setindex!(A::SymArray{Nsyms,T,N}, v, I::Vararg{Int,N}) where {Nsyms,T,N} = begin
+    @boundscheck checkbounds(A,I...)
+    permsign, grpinds = _sub2grp(A,I...)
+    @inbounds A.data[grpinds...] = permsign * v
+end
 
 eachindex(S::SymArray) = CartesianIndices(S)
 CartesianIndices(S::SymArray) = SymArrayIter(S)
@@ -198,8 +229,8 @@ end
 ndims(::SymIndexIter{Nsym}) where Nsym = Nsym
 eltype(::Type{SymIndexIter{Nsym}}) where Nsym = NTuple{Nsym,Int}
 length(iter::SymIndexIter{Nsym}) where Nsym = symgrp_size(iter.size,Nsym)
-first(iter::SymIndexIter{Nsym}) where Nsym = ntuple(one,Val(Nsym))
-last(iter::SymIndexIter{Nsym}) where Nsym = ntuple(i->iter.size,Val(Nsym))
+first(iter::SymIndexIter{Nsym}) where Nsym = Nsym > 0 ? ntuple(one,Val(Nsym)) : ntuple(i->i,Val(-Nsym))
+last(iter::SymIndexIter{Nsym}) where Nsym = Nsym>0 ? ntuple(i->iter.size,Val(Nsym)) : ntuple(i->iter.size+Nsym+i #= Nsym < 0 here =#,Val(-Nsym))
 
 @inline function iterate(iter::SymIndexIter)
     I = first(iter)

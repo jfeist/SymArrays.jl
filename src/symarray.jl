@@ -5,8 +5,8 @@ using TupleTools
 using Adapt
 
 "size of a single symmetric group with Nsym dimensions and size Nt per dimension. Nsym<0 means antisymmetric"
-symgrp_size(Nt,Nsym) = Nsym > 0 ? binomial_simple(Nt-1+Nsym, Nsym) : binomial_simple(Nt, Nsym)
-symgrp_size(Nt,::Val{Nsym}) where Nsym = Nsym > 0 ? binomial_unrolled(Nt+(Nsym-1),Val(Nsym)) : binomial_unrolled(Nt,Val(Nsym))
+symgrp_size(Nt,Nsym) = Nsym > 0 ? binomial_simple(Nt-1+Nsym, Nsym) : binomial_simple(Nt, -Nsym)
+symgrp_size(Nt,::Val{Nsym}) where Nsym = Nsym > 0 ? binomial_unrolled(Nt+(Nsym-1),Val(Nsym)) : binomial_unrolled(Nt,Val(-Nsym))
 
 # calculates the length of a SymArray
 symarrlength(Nts,Nsyms) = prod(symgrp_size.(Nts,Nsyms))
@@ -226,47 +226,59 @@ struct SymIndexIter{Nsym}
     "create an iterator that gives i1<=i2<=i3 etc for one index group"
     SymIndexIter(Nsym,size) = new{Nsym}(size)
 end
-ndims(::SymIndexIter{Nsym}) where Nsym = Nsym
-eltype(::Type{SymIndexIter{Nsym}}) where Nsym = NTuple{Nsym,Int}
-length(iter::SymIndexIter{Nsym}) where Nsym = symgrp_size(iter.size,Nsym)
-first(iter::SymIndexIter{Nsym}) where Nsym = Nsym > 0 ? ntuple(one,Val(Nsym)) : ntuple(i->i,Val(-Nsym))
-last(iter::SymIndexIter{Nsym}) where Nsym = Nsym>0 ? ntuple(i->iter.size,Val(Nsym)) : ntuple(i->iter.size+Nsym+i #= Nsym < 0 here =#,Val(-Nsym))
+Base.IteratorSize(::Type{<:SymIndexIter}) = Base.HasLength()
+Base.IteratorEltype(::Type{<:SymIndexIter}) = Base.HasEltype()
+Base.ndims(::SymIndexIter{Nsym}) where Nsym = Nsym
+Base.eltype(::Type{SymIndexIter{Nsym}}) where Nsym = NTuple{Nsym,Int}
+Base.length(iter::SymIndexIter{Nsym}) where Nsym = symgrp_size(iter.size,Nsym)
+Base.first(iter::SymIndexIter{Nsym}) where Nsym = Nsym > 0 ? ntuple(one,Val(Nsym)) : ntuple(i->i,Val(-Nsym))
+Base.last(iter::SymIndexIter{Nsym}) where Nsym = Nsym>0 ? ntuple(i->iter.size,Val(Nsym)) : ntuple(i->iter.size+Nsym+i #= Nsym < 0 here =#,Val(-Nsym))
 
-@inline function iterate(iter::SymIndexIter)
+@inline function Base.iterate(iter::SymIndexIter)
     I = first(iter)
     I, I
 end
-@inline function iterate(iter::SymIndexIter, state)
-    valid, I = __inc(state, iter.size)
+@inline function Base.iterate(iter::SymIndexIter, state)
+    valid, I = __inc(iter, state)
     ifelse(valid, (I, I), nothing)
 end
-# increment post check to avoid integer overflow
-@inline __inc(::Tuple{}, ::Tuple{}) = false, ()
-@inline function __inc(state::Tuple{Int}, size::Int)
-    valid = state[1] < size
-    return valid, (state[1]+1,)
-end
-@inline function __inc(state::NTuple{N,Int}, size::Int) where N
-    if state[1] < state[2]
+
+function __inc(iter::SymIndexIter{Nsym}, state::NTuple{N,Int}) where {Nsym,N}
+    if state[1] + (Nsym<0) < state[2]
         return true, (state[1]+1, tail(state)...)
     end
-    valid, I = __inc(tail(state), size)
-    return valid, (1, I...)
+    valid, I = __inc(iter, tail(state))
+    # if Nsym<0, lowest possible value for nth index is n
+    In = ifelse(Nsym>0, 1, 1 - Nsym - N)
+    return valid, (In, I...)
+end
+function __inc(iter::SymIndexIter, state::Tuple{Int})
+    # last index can go until iter.size independent of (anti-)symmetry
+    state[1] < iter.size, (state[1]+1,)
 end
 
 function _find_symind(ind::T, ::Val{dim}, high::T) where {dim,T<:Integer}
     dim==1 ? ind+one(T) : searchlast_func(ind, x->symind2ind(x,Val(dim)),one(T),high)
 end
+function _find_asymind(ind::T, ::Val{dim}, high::T) where {dim,T<:Integer}
+    dim==1 ? ind+one(T) : searchlast_func(ind, x->asymind2ind(x,Val(dim)),T(dim),high)
+end
+
 
 """convert a linear index for a symmetric index group into a group of subindices"""
 @generated function ind2sub_symgrp(SI::SymIndexIter{N},ind::T) where {N,T<:Integer}
     code = quote
         ind -= 1
     end
-    kis = Symbol.(:k,1:N)
-    for dim=N:-1:2
-        push!(code.args,:( $(kis[dim]) = _find_symind(ind,Val($dim),T(SI.size)) ))
-        push!(code.args,:( ind -= symind2ind($(kis[dim]),Val($dim)) ))
+    kis = Symbol.(:k,1:abs(N))
+    for dim=abs(N):-1:2
+        if N>0
+            push!(code.args,:( $(kis[dim]) = _find_symind(ind,Val($dim),T(SI.size)) ))
+            push!(code.args,:( ind -= symind2ind($(kis[dim]),Val($dim)) ))
+        else
+            push!(code.args,:( $(kis[dim]) = _find_asymind(ind,Val($dim),T(SI.size)) ))
+            push!(code.args,:( ind -= asymind2ind($(kis[dim]),Val($dim)) ))
+        end
     end
     push!(code.args, :( k1 = ind + 1 ))
     push!(code.args, :( return ($(kis...),)) )

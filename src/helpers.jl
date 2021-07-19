@@ -59,3 +59,37 @@ function searchlast_func(x,func,low::T,high::T) where T<:Integer
     end
     return low
 end
+
+"""
+    sort_track_parity(t::Tuple) -> ::Int, ::Tuple
+
+Sorts the tuple `t` and tracks whether the permutation needed to sort it is even
+or odd. Returns (p, ts), where p = ±1 and ts is the sorted tuple. Algorithm
+copied from TupleTools (removing optional lt, by, rev, but adding the
+tracking of the permutation sign).
+"""
+@inline function sort_track_parity(t::Tuple)
+    t1, t2 = TupleTools._split(t)
+    p1,t1s = sort_track_parity(t1)
+    p2,t2s = sort_track_parity(t2)
+    pm,ts = _merge_track_parity(t1s, t2s)
+    return pm*p1*p2, ts
+end
+@inline sort_track_parity(t::Tuple{Any}) = 1, t
+@inline sort_track_parity(t::Tuple{}) = 1, t
+
+function _merge_track_parity(t1::Tuple, t2::Tuple)
+    if first(t1) < first(t2)
+        pm, tm = _merge_track_parity(Base.tail(t1), t2)
+        return pm, (first(t1), tm...)
+    else
+        pm, tm = _merge_track_parity(t1, Base.tail(t2))
+        # if first(t1)==first(t2), order and thus parity are not well defined
+        # otherwise, there are length(t1) inversions
+        pm = first(t1) == first(t2) ? 0 : (iseven(length(t1)) ? pm : -pm)
+        return pm, (first(t2), tm...)
+    end
+end
+_merge_track_parity(::Tuple{}, t2::Tuple) = 1, t2
+_merge_track_parity(t1::Tuple, ::Tuple{}) = 1, t1
+_merge_track_parity(::Tuple{}, ::Tuple{}) = 1, ()

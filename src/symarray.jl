@@ -199,13 +199,12 @@ first(iter::SymIndexIter{Nsym}) where Nsym = ntuple(one,Val(Nsym))
 last(iter::SymIndexIter{Nsym}) where Nsym = ntuple(i->iter.size,Val(Nsym))
 
 @inline function iterate(iter::SymIndexIter)
-    iterfirst = first(iter)
-    iterfirst, iterfirst
+    I = first(iter)
+    I, I
 end
 @inline function iterate(iter::SymIndexIter, state)
     valid, I = __inc(state, iter.size)
-    valid || return nothing
-    return I, I
+    ifelse(valid, (I, I), nothing)
 end
 # increment post check to avoid integer overflow
 @inline __inc(::Tuple{}, ::Tuple{}) = false, ()

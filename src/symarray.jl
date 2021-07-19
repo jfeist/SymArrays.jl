@@ -197,13 +197,13 @@ first(iter::SymArrayIter) = CartesianIndex(map(one, iter.sizes))
 last(iter::SymArrayIter) = CartesianIndex(iter.sizes...)
 
 @inline function iterate(iter::SymArrayIter)
-    iterfirst = first(iter)
-    iterfirst, iterfirst
+    cI = first(iter)
+    cI, Tuple(cI)
 end
 @inline function iterate(iter::SymArrayIter, state)
-    valid, I = __inc(state.I, iter.sizes, iter.lessnext)
+    valid, I = __inc(state, iter.sizes, iter.lessnext)
     valid || return nothing
-    return CartesianIndex(I...), CartesianIndex(I...)
+    CartesianIndex(I), I
 end
 # increment post check to avoid integer overflow
 @inline __inc(::Tuple{}, ::Tuple{}, ::Tuple{}) = false, ()

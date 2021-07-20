@@ -1,10 +1,12 @@
 using Test
 using SymArrays
-using SymArrays: symarrlength, _sub2grp, which_symgrp, SymIndexIter, ind2sub_symgrp
+using SymArrays: symarrlength, _sub2grp, which_symgrp, SymIndexIter, ind2sub_symgrp, sort_track_parity
 using TensorOperations
 using Random
 using CUDA
 using cuTENSOR
+using Combinatorics: levicivita
+
 CUDA.allowscalar(false)
 
 function test_ind2sub(SI::SymIndexIter)
@@ -16,6 +18,24 @@ function test_ind2sub(SI::SymIndexIter)
 end
 
 @testset "SymArrays.jl" begin
+    @testset "sort_track_parity" begin
+        tst_sortpar = () -> begin
+            sort_parity(x) = levicivita(sortperm(x))*allunique(x)
+            allok = true
+            for ii = 1:1000
+                n = rand(1:10)
+                # replace = true so we can get parity 0
+                a = rand(1:100, n)
+                p1, as1 = sort_track_parity(Tuple(a))
+                p2, as2 = sort_parity(a), Tuple(sort(a))
+                # do not use @test here so we do not get 1000 tests in the count
+                allok &= (p1,as1) == (p2,as2)
+            end
+            allok
+        end
+        @test tst_sortpar()
+    end
+
     @testset "SymIndexIter" begin
         for d in 1:4
             for n in (10,15,30,57)

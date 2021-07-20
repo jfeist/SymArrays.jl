@@ -50,6 +50,10 @@ end
 
     @testset "SymArray" begin
         @test symarrlength((3,6,4,3),(3,2,1,3)) == 8400
+        @test symarrlength((6,),(-6)) == 1
+        @test symarrlength((7,),(-6)) == 7
+        @test symarrlength((8,),(-6)) == 28
+        @test symarrlength((3,7,2),(2,-6,2)) == 126
 
         S = SymArray{(2,),Float64}(5,5)
         @test nsymgrps(S) == 1
@@ -67,6 +71,19 @@ end
         @test (S[1,5] = 2.; S[1,5] == 2.)
         @test_throws BoundsError S[0,6] = 2.
 
+        S = SymArray{(3,-2,2),Float64}(2,2,2,3,3,4,4)
+        @test nsymgrps(S) == 3
+        @test symgrps(S) == (3,-2,2)
+        @test size(S) == (2,2,2,3,3,4,4)
+        @test length(S) == 120
+        # iterating over all indices should give only the distinct indices,
+        # i.e., give the same number of terms as the array length
+        @test sum(1 for s in S) == length(S)
+        @test sum(1 for I in eachindex(S)) == length(S)
+
+        # calculating the linear index when iterating over Cartesian indices should give sequential access to the array
+        @test 1:length(S) == [(LinearIndices(S.data)[_sub2grp(S,Tuple(I)...)[2]...] for I in eachindex(S))...]
+
         S = SymArray{(3,1,2,2),Float64}(3,3,3,2,4,4,4,4)
         @test nsymgrps(S) == 4
         @test symgrps(S) == (3,1,2,2)
@@ -81,19 +98,44 @@ end
         @test 1:length(S) == [(LinearIndices(S.data)[_sub2grp(S,Tuple(I)...)[2]...] for I in eachindex(S))...]
 
         @testset "_sub2grp" begin
+            S = SymArray{(3,1,2,2),Float64}(3,3,3,2,4,4,4,4)    
             # test that permuting exchangeable indices accesses the same array element
-            i1  = _sub2grp(S,1,2,3,1,4,3,2,1)
-            @test _sub2grp(S,2,3,1,1,4,3,2,1) == i1
-            @test _sub2grp(S,2,3,1,1,3,4,2,1) == i1
-            @test _sub2grp(S,2,3,1,1,3,4,1,2) == i1
-            @test _sub2grp(S,2,1,3,1,4,3,1,2) == i1
+            p1,i1  = _sub2grp(S,1,2,3,1,4,3,2,1)
+            @test _sub2grp(S,2,3,1,1,4,3,2,1) == (p1,i1)
+            @test _sub2grp(S,2,3,1,1,3,4,2,1) == (p1,i1)
+            @test _sub2grp(S,2,3,1,1,3,4,1,2) == (p1,i1)
+            @test _sub2grp(S,2,1,3,1,4,3,1,2) == (p1,i1)
             # make sure that swapping independent indices gives a different array element
-            @test _sub2grp(S,2,1,3,1,4,1,3,2) != i1
-            @test _sub2grp(S,1,2,3,2,4,3,2,1) != i1
-            @test _sub2grp(S,1,2,3,1,1,3,2,4) != i1
+            @test _sub2grp(S,2,1,3,1,4,1,3,2) != (p1,i1)
+            @test _sub2grp(S,1,2,3,2,4,3,2,1) != (p1,i1)
+            @test _sub2grp(S,1,2,3,1,1,3,2,4) != (p1,i1)
 
             SI = eachindex(S)
             @test first(SI) == CartesianIndex(1,1,1,1,1,1,1,1)
+
+            S = SymArray{(-4,),Float64}(5,5,5,5)
+            # test that permuting exchangeable indices accesses the same array element
+            # and gives the correct permutation symmetry
+            p1,i1  = _sub2grp(S,1,2,4,5)
+            @test _sub2grp(S,1,4,2,5) == (-p1,i1)
+            @test _sub2grp(S,1,4,5,2) == (p1,i1)
+            @test _sub2grp(S,4,1,5,2) == (-p1,i1)
+            @test _sub2grp(S,1,5,4,2) == (-p1,i1)
+            @test _sub2grp(S,1,5,2,4) == (p1,i1)
+            p1,i1  = _sub2grp(S,1,1,4,5)
+            @test p1 == 0
+
+            S = SymArray{(3,-2,2),Float64}(2,2,2,3,3,4,4)
+            # test that permuting exchangeable indices accesses the same array element
+            # and gives the correct permutation symmetry
+            p1,i1  = _sub2grp(S,1,2,1,1,3,4,2)
+            @test _sub2grp(S,1,1,2,1,3,4,2) == (p1,i1)
+            @test _sub2grp(S,1,2,1,3,1,4,2) == (-p1,i1)
+            @test _sub2grp(S,1,2,1,1,3,2,4) == (p1,i1)
+            @test _sub2grp(S,2,1,1,3,1,4,2) == (-p1,i1)
+            # make sure that swapping independent indices gives a different array element
+            @test _sub2grp(S,2,2,1,1,3,4,1) != (p1,i1)
+            @test _sub2grp(S,1,2,1,2,3,4,1) != (p1,i1)
 
             NN = 4
             maxNdim = 40
@@ -102,6 +144,13 @@ end
                 Is = ntuple(i->NN,Ndim)
                 @test _sub2grp(S,Is...) == (1, size(S.data))
                 Is = ntuple(i->1,Ndim)
+                @test _sub2grp(S,Is...) == (1, (1,))
+
+                # for antisymmetric array, NN must be larger than Ndim
+                S = SymArray{(-Ndim,),Float64}(ntuple(i->NN+Ndim,Ndim)...)
+                Is = ntuple(i->NN+i,Ndim)
+                @test _sub2grp(S,Is...) == (1, size(S.data))
+                Is = ntuple(i->i,Ndim)
                 @test _sub2grp(S,Is...) == (1, (1,))
             end
         end

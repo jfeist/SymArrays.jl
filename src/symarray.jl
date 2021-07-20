@@ -163,62 +163,67 @@ getindex(A::SymArray, i::Int) = A.data[i]
 getindex(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = begin
     @boundscheck checkbounds(A,I...)
     permsign, grpinds = _sub2grp(A,I...)
+    permsign == 0 && return zero(T)
     @inbounds permsign * A.data[grpinds...]
 end
 setindex!(A::SymArray, v, i::Int) = A.data[i] = v
 setindex!(A::SymArray{Nsyms,T,N}, v, I::Vararg{Int,N}) where {Nsyms,T,N} = begin
     @boundscheck checkbounds(A,I...)
     permsign, grpinds = _sub2grp(A,I...)
+    @boundscheck permsign == 0 && throw(ArgumentError("indices $I do not exist for SymArray{$Nsyms} due to exchange antisymmetry."))
     @inbounds A.data[grpinds...] = permsign * v
 end
 
 eachindex(S::SymArray) = CartesianIndices(S)
 CartesianIndices(S::SymArray) = SymArrayIter(S)
 
-@generated function lessnexts(::SymArray{Nsyms}) where Nsyms
-    lessnext = ones(Bool,sum(Nsyms))
-    istart = 1
-    for Nsym in Nsyms
-        istart += Nsym
-        lessnext[istart-1] = false
-    end
-    Tuple(lessnext)
+struct SymArrayIter{Nsyms,N}
+    size::NTuple{N,Int}
+    SymArrayIter(A::SymArray{Nsyms,T,N}) where {Nsyms,T,N} = new{Nsyms,N}(A.size)
 end
 
-struct SymArrayIter{N}
-    lessnext::NTuple{N,Bool}
-    sizes::NTuple{N,Int}
-    "create an iterator that gives i1<=i2<=i3 etc for each index group"
-    SymArrayIter(A::SymArray{Nsyms,T,N,M}) where {Nsyms,T,N,M} = new{N}(lessnexts(A),A.size)
-end
-ndims(::SymArrayIter{N}) where N = N
-eltype(::Type{SymArrayIter{N}}) where N = NTuple{N,Int}
-first(iter::SymArrayIter) = CartesianIndex(map(one, iter.sizes))
-last(iter::SymArrayIter) = CartesianIndex(iter.sizes...)
+Base.IteratorSize(::Type{<:SymArrayIter}) = Base.HasLength()
+Base.IteratorEltype(::Type{<:SymArrayIter}) = Base.HasEltype()
+Base.ndims(::SymArrayIter{Nsym,N}) where {Nsym,N} = N
+Base.eltype(::Type{SymArrayIter{Nsym,N}}) where {Nsym,N} = NTuple{N,Int}
+Base.length(iter::SymArrayIter{Nsym,N}) where {Nsym,N} = symarrlength(_getNts(Val(Nsyms),iter.size),Nsyms)
+# make these generated functions so the code is simply the constant final tuple
+@generated Base.first(::SymArrayIter{Nsyms}) where Nsyms = CartesianIndex(TupleTools.flatten(first.(SymIndexIter.(Nsyms,Nsyms))))
+@generated Base.last(::SymArrayIter{Nsyms}) where Nsyms = CartesianIndex(TupleTools.flatten(last.(SymIndexIter.(Nsyms,Nsyms))))
 
-@inline function iterate(iter::SymArrayIter)
+@inline function Base.iterate(iter::SymArrayIter)
     cI = first(iter)
     cI, Tuple(cI)
 end
-@inline function iterate(iter::SymArrayIter, state)
-    valid, I = __inc(state, iter.sizes, iter.lessnext)
-    valid || return nothing
-    CartesianIndex(I), I
-end
-# increment post check to avoid integer overflow
-@inline __inc(::Tuple{}, ::Tuple{}, ::Tuple{}) = false, ()
-@inline function __inc(state::Tuple{Int}, size::Tuple{Int}, lessnext::Tuple{Int})
-    valid = state[1] < size[1]
-    return valid, (state[1]+1,)
-end
 
-@inline function __inc(state, sizes, lessnext)
-    smax = lessnext[1] ? state[2] : sizes[1]
-    if state[1] < smax
-        return true, (state[1]+1, tail(state)...)
+# do these with a generated function - when there is antisymmetry, this is much
+# easier than trying to come up with logic and data structures for efficient
+# tuple tail recursion
+@generated function Base.iterate(iter::SymArrayIter{Nsyms,N}, state::NTuple{N,Int}) where {Nsyms,N}
+    newstate = Any[:(state[$i]) for i=1:N]
+    code = Expr(:block)
+    currif = Expr(:if)
+    push!(code.args,currif)
+    # global dimension index
+    D = 0
+    for Nsym in Nsyms
+        for d = 1:abs(Nsym)
+            D += 1
+            maxv = d==abs(Nsym) ? :(iter.size[$D]) : (Nsym>0 ? :(state[$(D+1)]) : :(state[$(D+1)]-1))
+            newstate[D] = :( state[$D] + 1 )
+            push!(currif.args, :( state[$D] < $maxv ))
+            push!(currif.args, :( I = ($(newstate...),) ))
+            newstate[D] = Nsym>0 ? 1 : d
+            if D == N
+                push!(currif.args, :( return nothing ))
+            else
+                push!(currif.args, Expr(:elseif))
+                currif = currif.args[3]
+            end
+        end
     end
-    valid, I = __inc(tail(state), tail(sizes), tail(lessnext))
-    return valid, (1, I...)
+    push!(code.args, :( CartesianIndex(I), I ))
+    code
 end
 
 struct SymIndexIter{Nsym}

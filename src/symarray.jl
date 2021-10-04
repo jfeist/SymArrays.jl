@@ -101,6 +101,9 @@ copyto!(S::SymArray,Ssrc::SymArray) = begin
     S
 end
 
+Base.similar(src::SymArray{Nsyms}) where Nsyms = SymArray{Nsyms}(similar(parent(src)),size(src)...)
+Base.copy(src::SymArray{Nsyms}) where Nsyms = SymArray{Nsyms}(copy(parent(src)),size(src)...)
+
 fill!(S::SymArray,v) = fill!(S.data,v)
 
 ==(S1::SymArray,S2::SymArray) = (symgrps(S1),S1.data) == (symgrps(S2),S2.data)

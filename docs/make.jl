@@ -1,16 +1,24 @@
-using Documenter, SymArrays
+using SymArrays
+using Documenter
+
+DocMeta.setdocmeta!(SymArrays, :DocTestSetup, :(using SymArrays); recursive=true)
 
 makedocs(;
     modules=[SymArrays],
-    format=Documenter.HTML(),
+    authors="Johannes Feist <johannes.feist@gmail.com> and contributors",
+    repo="https://github.com/jfeist/SymArrays.jl/blob/{commit}{path}#{line}",
+    sitename="SymArrays.jl",
+    format=Documenter.HTML(;
+        prettyurls=get(ENV, "CI", "false") == "true",
+        canonical="https://jfeist.github.io/SymArrays.jl",
+        assets=String[],
+    ),
     pages=[
         "Home" => "index.md",
     ],
-    repo="https://github.com/jfeist/SymArrays.jl/blob/{commit}{path}#L{line}",
-    sitename="SymArrays.jl",
-    authors="Johannes Feist",
 )
 
 deploydocs(;
-    repo="github.com/jfeist/SymArrays.jl.git",
+    repo="github.com/jfeist/SymArrays.jl",
+    devbranch = "main",
 )

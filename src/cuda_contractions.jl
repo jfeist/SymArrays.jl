@@ -9,6 +9,7 @@ function cudims(n::Integer)
 end
 
 cudims(a::AbstractArray) = cudims(length(a))
+cudims(a::SymArray) = cudims(a.data)
 
 # COV_EXCL_START
 @inline ind2sub_(a::AbstractArray{T,0}, i) where T = ()

@@ -5,7 +5,7 @@ using CUDA
 ###########################################################################
 function cudims(n::Integer)
   threads = min(n, 256)
-  ceil(Int, n / threads), threads
+  cld(n,threads), threads
 end
 
 cudims(a::AbstractArray) = cudims(length(a))
@@ -29,10 +29,9 @@ end
 mygemv!(tA,alpha,A::CuArray,args...) = CUDA.CUBLAS.gemv!(tA,alpha,A,args...)
 _contract_middle!(res::CuArray,A,B) = (@tensor res[i,k] = B[i,j,k] * A[j])
 
-import Base: collect
 # for SymArrays on the GPU, collect should convert to a SymArray on the CPU
 # to convert to a "normal" Array, you then have to apply collect again
-collect(S::SymArray{Nsyms,T,N,M,datType}) where {Nsyms,T,N,M,datType<:CuArray} = SymArray{Nsyms}(collect(S.data),S.size...)
+Base.collect(S::SymArray{Nsyms,T,N,M,datType}) where {Nsyms,T,N,M,datType<:CuArray} = SymArray{Nsyms}(collect(S.data),S.size...)
 
 @generated function cuda_contraction_kernel(res, A, S, SI::SymIndexIter{Nsymres}) where {Nsymres}
     # calculate res[iA1,iA3,iS1,iSm2,iS3] = ∑_iA2 A[iA1,iA2,iA3] * S[iS1,iS2,iS3]

@@ -196,14 +196,14 @@ Base.length(iter::SymArrayIter{Nsym,N}) where {Nsym,N} = symarrlength(_getNts(Va
     cI, Tuple(cI)
 end
 
+cartind_and_tuple(xs...) = (CartesianIndex(xs),xs)
+
 # do these with a generated function - when there is antisymmetry, this is much
 # easier than trying to come up with logic and data structures for efficient
 # tuple tail recursion
 @generated function Base.iterate(iter::SymArrayIter{Nsyms,N}, state::NTuple{N,Int}) where {Nsyms,N}
     newstate = Any[:(state[$i]) for i=1:N]
-    code = Expr(:block)
-    currif = Expr(:if)
-    push!(code.args,currif)
+    code = Expr(:block, Expr(:meta, :inline))
     # global dimension index
     D = 0
     for Nsym in Nsyms
@@ -211,18 +211,11 @@ end
             D += 1
             maxv = d==abs(Nsym) ? :(iter.size[$D]) : (Nsym>0 ? :(state[$(D+1)]) : :(state[$(D+1)]-1))
             newstate[D] = :( state[$D] + 1 )
-            push!(currif.args, :( state[$D] < $maxv ))
-            push!(currif.args, :( I = ($(newstate...),) ))
+            push!(code.args, :( state[$D] < $maxv && return cartind_and_tuple($(newstate...)) ))
             newstate[D] = Nsym>0 ? 1 : d
-            if D == N
-                push!(currif.args, :( return nothing ))
-            else
-                push!(currif.args, Expr(:elseif))
-                currif = currif.args[3]
-            end
         end
     end
-    push!(code.args, :( CartesianIndex(I), I ))
+    push!(code.args, :(return nothing))
     code
 end
 
@@ -243,23 +236,20 @@ Base.last(iter::SymIndexIter{Nsym}) where Nsym = Nsym>0 ? ntuple(i->iter.size,Va
     I = first(iter)
     I, I
 end
-@inline function Base.iterate(iter::SymIndexIter, state)
-    valid, I = __inc(iter, state)
-    ifelse(valid, (I, I), nothing)
-end
 
-function __inc(iter::SymIndexIter{Nsym}, state::NTuple{N,Int}) where {Nsym,N}
-    if state[1] + (Nsym<0) < state[2]
-        return true, (state[1]+1, tail(state)...)
+double_tuple(xs...) = (xs,xs)
+
+@generated function Base.iterate(iter::SymIndexIter{Nsym}, state) where {Nsym}
+    newstate = Any[:(state[$i]) for i=1:abs(Nsym)]
+    code = Expr(:block, Expr(:meta, :inline))
+    for d = 1:abs(Nsym)
+        maxv = d==abs(Nsym) ? :(iter.size) : (Nsym>0 ? :(state[$(d+1)]) : :(state[$(d+1)]-1))
+        newstate[d] = :( state[$d] + 1 )
+        push!(code.args, :( state[$d] < $maxv && return double_tuple($(newstate...)) ))
+        newstate[d] = Nsym>0 ? 1 : d
     end
-    valid, I = __inc(iter, tail(state))
-    # if Nsym<0, lowest possible value for nth index is n
-    In = ifelse(Nsym>0, 1, 1 - Nsym - N)
-    return valid, (In, I...)
-end
-function __inc(iter::SymIndexIter, state::Tuple{Int})
-    # last index can go until iter.size independent of (anti-)symmetry
-    state[1] < iter.size, (state[1]+1,)
+    push!(code.args, :( return nothing ))
+    code
 end
 
 function _find_symind(ind::T, ::Val{dim}, high::T) where {dim,T<:Integer}
@@ -268,7 +258,6 @@ end
 function _find_asymind(ind::T, ::Val{dim}, high::T) where {dim,T<:Integer}
     dim==1 ? ind+one(T) : searchlast_func(ind, x->asymind2ind(x,Val(dim)),T(dim),high)
 end
-
 
 """convert a linear index for a symmetric index group into a group of subindices"""
 @generated function ind2sub_symgrp(SI::SymIndexIter{N},ind::T) where {N,T<:Integer}

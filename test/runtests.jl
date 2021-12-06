@@ -78,8 +78,8 @@ end
         @test length(S) == 120
         # iterating over all indices should give only the distinct indices,
         # i.e., give the same number of terms as the array length
-        @test sum(1 for s in S) == length(S)
-        @test sum(1 for I in eachindex(S)) == length(S)
+        @test count(x->true,S) == length(S)
+        @test count(x->true,eachindex(S)) == length(S)
 
         # calculating the linear index when iterating over Cartesian indices should give sequential access to the array
         @test 1:length(S) == [(LinearIndices(S.data)[_sub2grp(S,Tuple(I)...)[2]...] for I in eachindex(S))...]
@@ -91,8 +91,8 @@ end
         @test length(S) == 2000
         # iterating over all indices should give only the distinct indices,
         # i.e., give the same number of terms as the array length
-        @test sum(1 for s in S) == length(S)
-        @test sum(1 for I in eachindex(S)) == length(S)
+        @test count(x->true,S) == length(S)
+        @test count(x->true,eachindex(S)) == length(S)
 
         # calculating the linear index when iterating over Cartesian indices should give sequential access to the array
         @test 1:length(S) == [(LinearIndices(S.data)[_sub2grp(S,Tuple(I)...)[2]...] for I in eachindex(S))...]

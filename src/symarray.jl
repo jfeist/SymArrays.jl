@@ -1,5 +1,3 @@
-import Base: size, length, ndims, eltype, first, last, ==, parent
-import Base: getindex, setindex!, iterate, eachindex, IndexStyle, CartesianIndices, tail, copyto!, fill!
 using LinearAlgebra
 using TupleTools
 using Adapt
@@ -48,9 +46,9 @@ struct SymArray{Nsyms,T,N,M,datType<:AbstractArray} <: AbstractArray{T,N}
     end
 end
 
-parent(A::SymArray) = A.data
-size(A::SymArray) = A.size
-length(A::SymArray) = length(A.data)
+Base.parent(A::SymArray) = A.data
+Base.size(A::SymArray) = A.size
+Base.length(A::SymArray) = length(A.data)
 
 # this is necessary for CUDAnative kernels, but also generally useful
 # e.g., adapt(CuArray,S) will return a copy of the SymArray with storage in a CuArray
@@ -78,7 +76,7 @@ parent_type(::Type{<:LinearAlgebra.Adjoint{T,S}}) where {T,S} = S
 parent_type(::Type{<:SubArray{T,N,P}}) where {T,N,P} = P
 parent_type(::Type{<:SymArray{Nsyms,T,N,M,datType}}) where {Nsyms,T,N,M,datType} = datType
 
-copyto!(S::SymArray,A::AbstractArray) = begin
+Base.copyto!(S::SymArray,A::AbstractArray) = begin
     Ainds, Sinds = LinearIndices(A), LinearIndices(S)
     isempty(Ainds) || (checkbounds(Bool, Sinds, first(Ainds)) && checkbounds(Bool, Sinds, last(Ainds))) || throw(BoundsError(S, Ainds))
     @inbounds for (i,I) in zip(Ainds,eachindex(S))
@@ -86,7 +84,7 @@ copyto!(S::SymArray,A::AbstractArray) = begin
     end
     S
 end
-copyto!(A::AbstractArray,S::SymArray) = begin
+Base.copyto!(A::AbstractArray,S::SymArray) = begin
     Ainds, Sinds = LinearIndices(A), LinearIndices(S)
     isempty(Sinds) || (checkbounds(Bool, Ainds, first(Sinds)) && checkbounds(Bool, Ainds, last(Sinds))) || throw(BoundsError(A, Sinds))
     @inbounds for (i,I) in zip(Ainds,CartesianIndices(A))
@@ -94,7 +92,7 @@ copyto!(A::AbstractArray,S::SymArray) = begin
     end
     A
 end
-copyto!(S::SymArray,Ssrc::SymArray) = begin
+Base.copyto!(S::SymArray,Ssrc::SymArray) = begin
     @assert symgrps(S) == symgrps(Ssrc)
     @assert size(S) == size(Ssrc)
     copyto!(S.data,Ssrc.data)
@@ -104,9 +102,9 @@ end
 Base.similar(src::SymArray{Nsyms}) where Nsyms = SymArray{Nsyms}(similar(parent(src)),size(src)...)
 Base.copy(src::SymArray{Nsyms}) where Nsyms = SymArray{Nsyms}(copy(parent(src)),size(src)...)
 
-fill!(S::SymArray,v) = fill!(S.data,v)
+Base.fill!(S::SymArray,v) = fill!(S.data,v)
 
-==(S1::SymArray,S2::SymArray) = (symgrps(S1),S1.data) == (symgrps(S2),S2.data)
+Base.:(==)(S1::SymArray,S2::SymArray) = (symgrps(S1),S1.data) == (symgrps(S2),S2.data)
 
 SymArray{Nsyms}(A::AbstractArray{T}) where {Nsyms,T} = (S = SymArray{Nsyms,T}(size(A)...); copyto!(S,A))
 # to avoid ambiguity with Vararg "view" constructor above
@@ -158,24 +156,24 @@ end
 
 @generated _sub2grp(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = _sub2grp_code(Nsyms)
 
-IndexStyle(::Type{<:SymArray}) = IndexCartesian()
-getindex(A::SymArray, i::Int) = A.data[i]
-getindex(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = begin
+Base.IndexStyle(::Type{<:SymArray}) = IndexCartesian()
+Base.getindex(A::SymArray, i::Int) = A.data[i]
+Base.getindex(A::SymArray{Nsyms,T,N}, I::Vararg{Int,N}) where {Nsyms,T,N} = begin
     @boundscheck checkbounds(A,I...)
     permsign, grpinds = _sub2grp(A,I...)
     permsign == 0 && return zero(T)
     @inbounds permsign * A.data[grpinds...]
 end
-setindex!(A::SymArray, v, i::Int) = A.data[i] = v
-setindex!(A::SymArray{Nsyms,T,N}, v, I::Vararg{Int,N}) where {Nsyms,T,N} = begin
+Base.setindex!(A::SymArray, v, i::Int) = A.data[i] = v
+Base.setindex!(A::SymArray{Nsyms,T,N}, v, I::Vararg{Int,N}) where {Nsyms,T,N} = begin
     @boundscheck checkbounds(A,I...)
     permsign, grpinds = _sub2grp(A,I...)
     @boundscheck permsign == 0 && throw(ArgumentError("indices $I do not exist for SymArray{$Nsyms} due to exchange antisymmetry."))
     @inbounds A.data[grpinds...] = permsign * v
 end
 
-eachindex(S::SymArray) = CartesianIndices(S)
-CartesianIndices(S::SymArray) = SymArrayIter(S)
+Base.eachindex(S::SymArray) = CartesianIndices(S)
+Base.CartesianIndices(S::SymArray) = SymArrayIter(S)
 
 struct SymArrayIter{Nsyms,N}
     size::NTuple{N,Int}
@@ -187,7 +185,7 @@ Base.IteratorEltype(::Type{<:SymArrayIter}) = Base.HasEltype()
 Base.ndims(::SymArrayIter{Nsym,N}) where {Nsym,N} = N
 Base.eltype(::Type{SymArrayIter{Nsym,N}}) where {Nsym,N} = NTuple{N,Int}
 Base.length(iter::SymArrayIter{Nsym,N}) where {Nsym,N} = symarrlength(_getNts(Val(Nsyms),iter.size),Nsyms)
-# make these generated functions so the code is simply the constant final tuple
+# make these generated functions so the code is simply the constant final CartesianIndex
 @generated Base.first(::SymArrayIter{Nsyms}) where Nsyms = CartesianIndex(TupleTools.flatten(first.(SymIndexIter.(Nsyms,Nsyms))))
 @generated Base.last(::SymArrayIter{Nsyms}) where Nsyms = CartesianIndex(TupleTools.flatten(last.(SymIndexIter.(Nsyms,Nsyms))))
 
@@ -282,7 +280,7 @@ end
 
 @generated function _grp2sub(A::SymArray{Nsyms,T,N,M}, I::Vararg{Int,M}) where {Nsyms,T,N,M}
     exs = [:( ind2sub_symgrp(SymIndexIter($Nsym,A.Nts[$ii]),I[$ii]) ) for (ii,Nsym) in enumerate(Nsyms)]
-    code = :( TupleTools.flatten($(exs...)) )
+    code = Expr(:tuple, Expr.(:...,exs)...)
     #display(code)
     code
 end

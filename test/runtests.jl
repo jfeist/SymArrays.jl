@@ -4,6 +4,7 @@ using SymArrays: symarrlength, _sub2grp, which_symgrp
 using TensorOperations
 using Random
 using CUDA
+using cuTENSOR
 CUDA.allowscalar(false)
 
 @testset "SymArrays.jl" begin

@@ -2,7 +2,7 @@
 
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://jfeist.github.io/SymArrays.jl/stable)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://jfeist.github.io/SymArrays.jl/dev)
-[![Build Status](https://travis-ci.com/jfeist/SymArrays.jl.svg?branch=master)](https://travis-ci.com/jfeist/SymArrays.jl)
+[![Build Status](https://github.com/jfeist/SymArrays.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/jfeist/SymArrays.jl/actions/workflows/CI.yml)
 [![Codecov](https://codecov.io/gh/jfeist/SymArrays.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/jfeist/SymArrays.jl)
 
 This package provides some tools to efficiently store arrays with exchange symmetries, i.e., arrays where exchanging two indices leaves the value unchanged. It stores the underlying data in a flat vector and provides mappings that allow to address it as a "normal" `AbstractArray{T,N}`. To generate a new one with undefined data, use

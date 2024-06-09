@@ -1,7 +1,7 @@
 name = "SymArrays"
 uuid = "c2b21f84-4a8e-4c96-99a2-2b79df568f75"
 authors = ["Johannes Feist"]
-version = "0.3.4"
+version = "0.3.5"
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"

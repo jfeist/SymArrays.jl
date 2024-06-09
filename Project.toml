@@ -17,6 +17,7 @@ Adapt = "2, 3, 4"
 CUDA = "1, 2, 3, 4, 5"
 TensorOperations = "2, 3, 4"
 TupleTools = "1.1"
+cuTENSOR = "1, 2"
 julia = "1.6"
 
 [extras]
